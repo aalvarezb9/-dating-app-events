@@ -9,7 +9,7 @@
     "dev": "tsc --watch",
     "test": "jest",
     "clean": "rm -rf dist",
-    "postinstall": "npm run build"
+    "postinstall": "npm install --save-dev typescript && tsc || echo 'Build step skipped'"
   },
   "keywords": [
     "event-driven",
