@@ -12,6 +12,15 @@ export * from './services/event-publisher.service';
 // Repositories
 export * from './repositories/event-emitting.repository';
 
+// Base Repository System
+export * from './repositories/base/BaseRepository';
+export * from './repositories/base/IDatabaseAdapter';
+export * from './repositories/base/BaseRepositoryConfig';
+
+// Database Adapters
+export * from './repositories/adapters/PostgresAdapter';
+export * from './repositories/adapters/DynamoDBAdapter';
+
 // Decorators
 export * from './decorators/emitable.decorator';
 
