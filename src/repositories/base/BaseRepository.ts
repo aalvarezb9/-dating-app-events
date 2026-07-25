@@ -51,7 +51,7 @@ import { EventPublisher } from '../../services/event-publisher.service';
  * }
  * ```
  */
-export abstract class BaseRepository<Entity = any> {
+export class BaseRepository<Entity = any> {
   protected readonly logger = new Logger(this.constructor.name);
   protected pendingEvents: DomainEvent[] = [];
 
