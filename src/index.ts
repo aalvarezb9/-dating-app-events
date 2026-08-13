@@ -27,3 +27,6 @@ export * from './decorators/emitable.decorator';
 
 // Modules
 export * from './events.module';
+
+// Common Module (decorators, guards, interceptors, filters, DTOs, pipes)
+export * from './common';
