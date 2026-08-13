@@ -7,8 +7,25 @@ import {
 import { Observable } from 'rxjs';
 
 /**
+ * @deprecated Use ExecutionContextInterceptor instead
+ *
  * Interceptor that ensures tenant context is available in the request
  * This is used for implementing Row Level Security (RLS) at application level
+ *
+ * NOTE: This interceptor is now deprecated. Use ExecutionContextInterceptor
+ * instead, which provides the same functionality plus additional context
+ * (userId, requestId, etc.) using AsyncLocalStorage.
+ *
+ * Migration:
+ * ```typescript
+ * // Before
+ * import { TenantInterceptor } from '@dating-app/events';
+ * app.useGlobalInterceptors(new TenantInterceptor());
+ *
+ * // After
+ * import { ExecutionContextInterceptor } from '@dating-app/events';
+ * app.useGlobalInterceptors(new ExecutionContextInterceptor());
+ * ```
  */
 @Injectable()
 export class TenantInterceptor implements NestInterceptor {

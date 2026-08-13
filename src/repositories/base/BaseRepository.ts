@@ -3,6 +3,7 @@ import { IDatabaseAdapter, FindCriteria, FindOptions } from './IDatabaseAdapter'
 import { BaseRepositoryConfig, RepositoryOperation } from './BaseRepositoryConfig';
 import { DomainEvent, DomainEventType } from '../../types/events';
 import { EventPublisher } from '../../services/event-publisher.service';
+import { ExecutionContext } from '../../common/context/execution-context.service';
 import { randomUUID } from 'crypto';
 
 /**
@@ -69,7 +70,9 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Set tenant context for automatic filtering
-   * MUST be called before any CRUD operation
+   *
+   * NOTE: This is optional if you're using ExecutionContextInterceptor,
+   * which automatically captures tenantId from the request.
    */
   setTenantId(tenantId: string): void {
     this.tenantId = tenantId;
@@ -77,12 +80,28 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Get current tenant ID
+   *
+   * Tries to get tenantId in this order:
+   * 1. From ExecutionContext (set by ExecutionContextInterceptor)
+   * 2. From manually set tenantId (via setTenantId())
+   *
+   * @throws Error if no tenant ID is available
    */
   getTenantId(): string {
-    if (!this.tenantId) {
-      throw new Error('Tenant ID not set. Call setTenantId() before performing operations.');
+    // Try ExecutionContext first (recommended approach)
+    const contextTenantId = ExecutionContext.getTenantId();
+    if (contextTenantId) {
+      return contextTenantId;
     }
-    return this.tenantId;
+
+    // Fallback to manually set tenantId
+    if (this.tenantId) {
+      return this.tenantId;
+    }
+
+    throw new Error(
+      'Tenant ID not available. Either use ExecutionContextInterceptor globally, or call setTenantId() before performing operations.',
+    );
   }
 
   /**
