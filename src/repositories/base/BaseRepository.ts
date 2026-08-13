@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
  *
  * Features:
  * - Dual entity support (DB entity + Domain entity)
- * - Automatic tenant filtering on ALL operations
+ * - Automatic tenant filtering on ALL operations (with optional bypass)
  * - Domain event emission
  * - Soft delete support
  * - Entity mapping (DB ↔ Domain)
@@ -39,6 +39,13 @@ import { randomUUID } from 'crypto';
  *       },
  *       events: { ... }
  *     });
+ *   }
+ *
+ *   // Cross-tenant operation example
+ *   async isSubdomainNameAvailable(subdomain: string): Promise<boolean> {
+ *     // Bypass tenant filter for cross-tenant availability check
+ *     const exists = await super.exists({ subdomain }, true);
+ *     return !exists;
  *   }
  * }
  * ```
@@ -80,8 +87,14 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Add tenant filter to criteria
+   * @param criteria - Search criteria
+   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  private addTenantFilter(criteria: FindCriteria = {}): FindCriteria {
+  private addTenantFilter(criteria: FindCriteria = {}, bypassTenantFilter = false): FindCriteria {
+    if (bypassTenantFilter) {
+      return criteria;
+    }
+
     const tenantField = this.config.tenantIdField!;
     return {
       ...criteria,
@@ -167,11 +180,12 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Find by ID
-   * Automatically filters by tenant
+   * @param id - Entity ID
+   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async findById(id: string): Promise<DomainEntity | null> {
+  async findById(id: string, bypassTenantFilter = false): Promise<DomainEntity | null> {
     try {
-      const criteria = this.addTenantFilter({ [this.config.idField!]: id } as any);
+      const criteria = this.addTenantFilter({ [this.config.idField!]: id } as any, bypassTenantFilter);
       const result = await this.adapter.findOne(criteria);
       return result ? this.toDomain(result) : null;
     } catch (error) {
@@ -182,11 +196,12 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Find one by criteria
-   * Automatically filters by tenant
+   * @param criteria - Search criteria
+   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async findOne(criteria: FindCriteria = {}): Promise<DomainEntity | null> {
+  async findOne(criteria: FindCriteria = {}, bypassTenantFilter = false): Promise<DomainEntity | null> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
       const result = await this.adapter.findOne(filteredCriteria);
       return result ? this.toDomain(result) : null;
     } catch (error) {
@@ -197,14 +212,17 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Find many by criteria
-   * Automatically filters by tenant
+   * @param criteria - Search criteria
+   * @param options - Query options (limit, offset, order)
+   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
   async findMany(
     criteria: FindCriteria = {},
     options?: FindOptions,
+    bypassTenantFilter = false,
   ): Promise<DomainEntity[]> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
       const results = await this.adapter.findMany(filteredCriteria, options);
       return results.map((r) => this.toDomain(r));
     } catch (error) {
@@ -321,11 +339,12 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Check if entity exists
-   * Automatically filters by tenant
+   * @param criteria - Search criteria
+   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async exists(criteria: FindCriteria): Promise<boolean> {
+  async exists(criteria: FindCriteria, bypassTenantFilter = false): Promise<boolean> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
       return await this.adapter.exists(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error checking existence of ${this.config.entityName}:`, error);
@@ -335,11 +354,12 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Count entities
-   * Automatically filters by tenant
+   * @param criteria - Search criteria
+   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async count(criteria: FindCriteria = {}): Promise<number> {
+  async count(criteria: FindCriteria = {}, bypassTenantFilter = false): Promise<number> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
       return await this.adapter.count(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error counting ${this.config.entityName}:`, error);
