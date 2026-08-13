@@ -2,7 +2,6 @@
 node_modules/
 
 # Build output
-dist/
 
 # IDE
 .vscode/
@@ -26,3 +25,5 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+dist/
