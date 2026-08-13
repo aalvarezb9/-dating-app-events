@@ -1,101 +1,142 @@
 import { Logger } from '@nestjs/common';
 import { IDatabaseAdapter, FindCriteria, FindOptions } from './IDatabaseAdapter';
 import { BaseRepositoryConfig, RepositoryOperation } from './BaseRepositoryConfig';
-import { IBaseRepository } from './IBaseRepository';
-import { DomainEvent } from '../../types/events';
+import { DomainEvent, DomainEventType } from '../../types/events';
 import { EventPublisher } from '../../services/event-publisher.service';
+import { randomUUID } from 'crypto';
 
 /**
- * Base repository class that provides common CRUD operations
- * and automatic event emission for any database type
+ * Base repository class with DDD support and automatic tenant isolation
  *
- * @example PostgreSQL with TypeORM
+ * Features:
+ * - Dual entity support (DB entity + Domain entity)
+ * - Automatic tenant filtering on ALL operations
+ * - Domain event emission
+ * - Soft delete support
+ * - Entity mapping (DB ↔ Domain)
+ *
+ * @template DbEntity - Database entity type (TypeORM, Prisma, etc.)
+ * @template DomainEntity - Domain entity type (DDD entities)
+ *
+ * @example With DDD Mapping
  * ```typescript
- * class UserRepository extends BaseRepository<User> {
+ * export class SubdomainRepository extends BaseRepository<BusinessSubdomain, Subdomain> {
  *   constructor(
- *     postgresAdapter: PostgresAdapter<User>,
+ *     @InjectRepository(BusinessSubdomain) repo: Repository<BusinessSubdomain>,
  *     eventPublisher: EventPublisher,
  *   ) {
- *     super(postgresAdapter, eventPublisher, {
- *       entityName: 'User',
- *       enableSoftDelete: true,
- *       events: {
- *         publishOnCreate: true,
- *         eventTypeOnCreate: DomainEventType.USER_REGISTERED,
- *         eventFilter: (user, op) => op === 'create' && user.role === 'ADMIN',
- *         eventDataExtractor: (user) => ({
- *           userId: user.id,
- *           email: user.email,
+ *     super(new PostgresAdapter(repo), eventPublisher, {
+ *       entityName: 'Subdomain',
+ *       idField: 'id',
+ *       tenantIdField: 'tenantId',
+ *       mappers: {
+ *         toDbEntity: (domain) => ({
+ *           id: domain.getId(),
+ *           tenantId: domain.getTenantId(),
+ *           subdomain: domain.getSubdomainName().value,
  *         }),
+ *         toDomainEntity: (db) => Subdomain.reconstitute(db.id, db.tenantId, ...)
  *       },
- *     });
- *   }
- * }
- * ```
- *
- * @example DynamoDB
- * ```typescript
- * class ProductRepository extends BaseRepository<Product> {
- *   constructor(
- *     dynamoAdapter: DynamoDBAdapter<Product>,
- *     eventPublisher: EventPublisher,
- *   ) {
- *     super(dynamoAdapter, eventPublisher, {
- *       entityName: 'Product',
- *       events: {
- *         publishOnCreate: true,
- *         publishOnUpdate: true,
- *         eventFilter: (product) => product.price > 100, // Only emit events for expensive products
- *       },
+ *       events: { ... }
  *     });
  *   }
  * }
  * ```
  */
-export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
+export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   protected readonly logger = new Logger(this.constructor.name);
   protected pendingEvents: DomainEvent[] = [];
+  protected tenantId: string | null = null;
 
   constructor(
-    protected readonly adapter: IDatabaseAdapter<Entity>,
+    protected readonly adapter: IDatabaseAdapter<DbEntity>,
     protected readonly eventPublisher: EventPublisher,
-    protected readonly config: BaseRepositoryConfig<Entity>,
+    protected readonly config: BaseRepositoryConfig<DbEntity, DomainEntity>,
   ) {
     // Set defaults
     this.config.softDeleteField = this.config.softDeleteField || 'deleted_at';
     this.config.idField = this.config.idField || 'id';
-    this.config.tenantIdField = this.config.tenantIdField || 'tenant_id';
+    this.config.tenantIdField = this.config.tenantIdField || 'tenantId';
     this.config.userIdField = this.config.userIdField || 'user_id';
   }
 
   /**
-   * Save entity (create or update based on existence)
-   * This is the main method to use for persisting entities
+   * Set tenant context for automatic filtering
+   * MUST be called before any CRUD operation
    */
-  async save(entity: Partial<Entity>): Promise<void> {
+  setTenantId(tenantId: string): void {
+    this.tenantId = tenantId;
+  }
+
+  /**
+   * Get current tenant ID
+   */
+  getTenantId(): string {
+    if (!this.tenantId) {
+      throw new Error('Tenant ID not set. Call setTenantId() before performing operations.');
+    }
+    return this.tenantId;
+  }
+
+  /**
+   * Add tenant filter to criteria
+   */
+  private addTenantFilter(criteria: FindCriteria = {}): FindCriteria {
+    const tenantField = this.config.tenantIdField!;
+    return {
+      ...criteria,
+      [tenantField]: this.getTenantId(),
+    };
+  }
+
+  /**
+   * Map DB entity to Domain entity (if mappers configured)
+   */
+  protected toDomain(dbEntity: DbEntity): DomainEntity {
+    if (this.config.mappers) {
+      return this.config.mappers.toDomainEntity(dbEntity);
+    }
+    return dbEntity as unknown as DomainEntity;
+  }
+
+  /**
+   * Map Domain entity to DB entity (if mappers configured)
+   */
+  protected toDb(domainEntity: DomainEntity): Partial<DbEntity> {
+    if (this.config.mappers) {
+      return this.config.mappers.toDbEntity(domainEntity);
+    }
+    return domainEntity as unknown as Partial<DbEntity>;
+  }
+
+  /**
+   * Save entity (create or update)
+   * Automatically filters by tenant
+   */
+  async save(entity: DomainEntity): Promise<DomainEntity> {
     try {
+      const dbEntity = this.toDb(entity);
       const idField = this.config.idField!;
-      const entityId = (entity as any)[idField];
+      const entityId = (dbEntity as any)[idField];
 
       if (!entityId) {
         throw new Error(`Entity must have ${idField} field to save`);
       }
 
-      // Check if entity exists
-      const existing = await this.adapter.findById(entityId);
+      // Add tenant filter
+      const criteria = this.addTenantFilter({ [idField]: entityId } as any);
+      const existing = await this.adapter.findOne(criteria);
 
+      let result: DbEntity;
       if (existing) {
-        // Update existing
-        await this.adapter.update(entityId, entity);
-        const updated = await this.adapter.findById(entityId);
-        if (updated) {
-          await this.handleEventEmission(updated, 'update');
-        }
+        result = await this.adapter.update(entityId, dbEntity);
+        await this.handleEventEmission(result, 'update');
       } else {
-        // Create new
-        const created = await this.adapter.create(entity);
-        await this.handleEventEmission(created, 'create');
+        result = await this.adapter.create(dbEntity);
+        await this.handleEventEmission(result, 'create');
       }
+
+      return this.toDomain(result);
     } catch (error) {
       this.logger.error(`Error saving ${this.config.entityName}:`, error);
       throw error;
@@ -103,15 +144,21 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   }
 
   /**
-   * Create a new entity
+   * Create entity
+   * Automatically adds tenant ID
    */
-  async create(entity: Partial<Entity>): Promise<Entity> {
+  async create(entity: Partial<DbEntity>): Promise<DomainEntity> {
     try {
-      const result = await this.adapter.create(entity);
+      const tenantField = this.config.tenantIdField!;
+      const entityWithTenant = {
+        ...entity,
+        [tenantField]: this.getTenantId(),
+      } as Partial<DbEntity>;
 
+      const result = await this.adapter.create(entityWithTenant);
       await this.handleEventEmission(result, 'create');
 
-      return result;
+      return this.toDomain(result);
     } catch (error) {
       this.logger.error(`Error creating ${this.config.entityName}:`, error);
       throw error;
@@ -119,69 +166,14 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   }
 
   /**
-   * Create multiple entities
+   * Find by ID
+   * Automatically filters by tenant
    */
-  async createMany(entities: Partial<Entity>[]): Promise<Entity[]> {
+  async findById(id: string): Promise<DomainEntity | null> {
     try {
-      const results = await this.adapter.createMany(entities);
-
-      for (const result of results) {
-        await this.handleEventEmission(result, 'create');
-      }
-
-      return results;
-    } catch (error) {
-      this.logger.error(`Error creating multiple ${this.config.entityName}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update an existing entity
-   */
-  async update(id: string, partialEntity: Partial<Entity>): Promise<Entity> {
-    try {
-      const result = await this.adapter.update(id, partialEntity);
-
-      await this.handleEventEmission(result, 'update');
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error updating ${this.config.entityName} with id ${id}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find one entity by criteria
-   */
-  async findOne(criteria: FindCriteria): Promise<Entity | null> {
-    try {
-      return await this.adapter.findOne(criteria);
-    } catch (error) {
-      this.logger.error(`Error finding one ${this.config.entityName}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find multiple entities
-   */
-  async findMany(criteria?: FindCriteria, options?: FindOptions): Promise<Entity[]> {
-    try {
-      return await this.adapter.findMany(criteria || {}, options);
-    } catch (error) {
-      this.logger.error(`Error finding ${this.config.entityName}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find entity by ID
-   */
-  async findById(id: string): Promise<Entity | null> {
-    try {
-      return await this.adapter.findById(id);
+      const criteria = this.addTenantFilter({ [this.config.idField!]: id } as any);
+      const result = await this.adapter.findOne(criteria);
+      return result ? this.toDomain(result) : null;
     } catch (error) {
       this.logger.error(`Error finding ${this.config.entityName} by id ${id}:`, error);
       throw error;
@@ -189,32 +181,90 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   }
 
   /**
-   * Delete entity permanently (accepts entity or id)
+   * Find one by criteria
+   * Automatically filters by tenant
    */
-  async delete(entityOrId: Entity | string): Promise<void> {
+  async findOne(criteria: FindCriteria = {}): Promise<DomainEntity | null> {
     try {
-      let entity: Entity | null;
-      let id: string;
+      const filteredCriteria = this.addTenantFilter(criteria);
+      const result = await this.adapter.findOne(filteredCriteria);
+      return result ? this.toDomain(result) : null;
+    } catch (error) {
+      this.logger.error(`Error finding ${this.config.entityName}:`, error);
+      throw error;
+    }
+  }
 
-      // Check if it's an entity object or just an ID
-      if (typeof entityOrId === 'string') {
-        id = entityOrId;
-        entity = await this.adapter.findById(id);
-        if (!entity) {
-          throw new Error(`${this.config.entityName} with id ${id} not found`);
-        }
-      } else {
-        entity = entityOrId;
-        const idField = this.config.idField!;
-        id = (entity as any)[idField];
-        if (!id) {
-          throw new Error(`Entity must have ${idField} field to delete`);
-        }
+  /**
+   * Find many by criteria
+   * Automatically filters by tenant
+   */
+  async findMany(
+    criteria: FindCriteria = {},
+    options?: FindOptions,
+  ): Promise<DomainEntity[]> {
+    try {
+      const filteredCriteria = this.addTenantFilter(criteria);
+      const results = await this.adapter.findMany(filteredCriteria, options);
+      return results.map((r) => this.toDomain(r));
+    } catch (error) {
+      this.logger.error(`Error finding many ${this.config.entityName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find all (for current tenant only)
+   */
+  async findAll(options?: FindOptions): Promise<DomainEntity[]> {
+    return this.findMany({}, options);
+  }
+
+  /**
+   * Update entity by ID
+   * Automatically filters by tenant
+   */
+  async update(id: string, partialEntity: Partial<DbEntity>): Promise<DomainEntity> {
+    try {
+      // Verify entity belongs to tenant
+      const existing = await this.findById(id);
+      if (!existing) {
+        throw new Error(`${this.config.entityName} with id ${id} not found for this tenant`);
       }
 
-      await this.adapter.delete(id);
+      const result = await this.adapter.update(id, partialEntity);
+      await this.handleEventEmission(result, 'update');
 
-      await this.handleEventEmission(entity, 'delete');
+      return this.toDomain(result);
+    } catch (error) {
+      this.logger.error(`Error updating ${this.config.entityName} with id ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete entity by ID
+   * Automatically filters by tenant
+   */
+  async delete(id: string | DomainEntity): Promise<void> {
+    try {
+      let entityId: string;
+
+      if (typeof id === 'string') {
+        entityId = id;
+      } else {
+        const dbEntity = this.toDb(id);
+        entityId = (dbEntity as any)[this.config.idField!];
+      }
+
+      // Verify entity belongs to tenant before deleting
+      const existing = await this.findById(entityId);
+      if (!existing) {
+        throw new Error(`${this.config.entityName} with id ${entityId} not found for this tenant`);
+      }
+
+      await this.adapter.delete(entityId);
+      await this.handleEventEmission(this.toDb(existing) as DbEntity, 'delete');
     } catch (error) {
       this.logger.error(`Error deleting ${this.config.entityName}:`, error);
       throw error;
@@ -222,7 +272,8 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   }
 
   /**
-   * Soft delete entity (mark as deleted)
+   * Soft delete entity
+   * Automatically filters by tenant
    */
   async softDelete(id: string): Promise<void> {
     if (!this.config.enableSoftDelete) {
@@ -230,14 +281,17 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
     }
 
     try {
-      const entity = await this.adapter.findById(id);
-      if (!entity) {
-        throw new Error(`${this.config.entityName} with id ${id} not found`);
+      // Verify entity belongs to tenant
+      const existing = await this.findById(id);
+      if (!existing) {
+        throw new Error(`${this.config.entityName} with id ${id} not found for this tenant`);
       }
 
       await this.adapter.softDelete(id);
-
-      await this.handleEventEmission(entity, 'soft-delete');
+      const updated = await this.adapter.findById(id);
+      if (updated) {
+        await this.handleEventEmission(updated, 'soft-delete');
+      }
     } catch (error) {
       this.logger.error(`Error soft deleting ${this.config.entityName} with id ${id}:`, error);
       throw error;
@@ -246,6 +300,7 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
 
   /**
    * Restore soft-deleted entity
+   * Automatically filters by tenant
    */
   async restore(id: string): Promise<void> {
     if (!this.config.enableSoftDelete) {
@@ -254,10 +309,9 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
 
     try {
       await this.adapter.restore(id);
-
-      const entity = await this.adapter.findById(id);
-      if (entity) {
-        await this.handleEventEmission(entity, 'restore');
+      const restored = await this.adapter.findById(id);
+      if (restored) {
+        await this.handleEventEmission(restored, 'restore');
       }
     } catch (error) {
       this.logger.error(`Error restoring ${this.config.entityName} with id ${id}:`, error);
@@ -266,23 +320,13 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   }
 
   /**
-   * Count entities
-   */
-  async count(criteria?: FindCriteria): Promise<number> {
-    try {
-      return await this.adapter.count(criteria);
-    } catch (error) {
-      this.logger.error(`Error counting ${this.config.entityName}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Check if entity exists
+   * Automatically filters by tenant
    */
   async exists(criteria: FindCriteria): Promise<boolean> {
     try {
-      return await this.adapter.exists(criteria);
+      const filteredCriteria = this.addTenantFilter(criteria);
+      return await this.adapter.exists(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error checking existence of ${this.config.entityName}:`, error);
       throw error;
@@ -290,175 +334,91 @@ export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   }
 
   /**
-   * Handle event emission based on operation and configuration
+   * Count entities
+   * Automatically filters by tenant
    */
-  protected async handleEventEmission(
-    entity: Entity,
-    operation: RepositoryOperation,
-  ): Promise<void> {
-    if (!this.config.events) {
-      return;
-    }
-
-    const { events } = this.config;
-
-    // Check if should publish based on operation
-    const shouldPublish = this.shouldPublishEvent(operation);
-    if (!shouldPublish) {
-      return;
-    }
-
-    // Apply custom filter if provided
-    if (events.eventFilter && !events.eventFilter(entity, operation)) {
-      this.logger.debug(`Event filter rejected ${operation} event for ${this.config.entityName}`);
-      return;
-    }
-
-    // Get event type for this operation
-    const eventType = this.getEventTypeForOperation(operation);
-    if (!eventType) {
-      this.logger.warn(`No event type configured for ${operation} operation on ${this.config.entityName}`);
-      return;
-    }
-
-    // Create and publish event
-    const event = this.createEventForEntity(entity, eventType, operation);
-    this.pendingEvents.push(event);
-
+  async count(criteria: FindCriteria = {}): Promise<number> {
     try {
-      await this.eventPublisher.publishEventAndQueue(event);
-      this.logger.debug(`Published ${eventType} event for ${this.config.entityName}`);
+      const filteredCriteria = this.addTenantFilter(criteria);
+      return await this.adapter.count(filteredCriteria);
     } catch (error) {
-      this.logger.error(`Error publishing event for ${this.config.entityName}:`, error);
-      // Don't throw - event emission failures shouldn't break CRUD operations
-    }
-  }
-
-  /**
-   * Determine if should publish event for operation
-   */
-  protected shouldPublishEvent(operation: RepositoryOperation): boolean {
-    const { events } = this.config;
-    if (!events) return false;
-
-    switch (operation) {
-      case 'create':
-        return events.publishOnCreate === true;
-      case 'update':
-        return events.publishOnUpdate === true;
-      case 'delete':
-        return events.publishOnDelete === true;
-      case 'soft-delete':
-        return events.publishOnSoftDelete === true;
-      case 'restore':
-        return events.publishOnRestore === true;
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * Get event type for operation
-   */
-  protected getEventTypeForOperation(operation: RepositoryOperation): string | undefined {
-    const { events } = this.config;
-    if (!events) return undefined;
-
-    switch (operation) {
-      case 'create':
-        return events.eventTypeOnCreate;
-      case 'update':
-        return events.eventTypeOnUpdate;
-      case 'delete':
-        return events.eventTypeOnDelete;
-      case 'soft-delete':
-        return events.eventTypeOnSoftDelete;
-      case 'restore':
-        return events.eventTypeOnRestore;
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Create domain event for entity
-   */
-  protected createEventForEntity(
-    entity: Entity,
-    eventType: string,
-    operation: RepositoryOperation,
-  ): DomainEvent {
-    const anyEntity = entity as any;
-    const idField = this.config.idField!;
-    const aggregateId = anyEntity[idField] || 'unknown';
-
-    let eventData: Record<string, any> = {
-      [idField]: aggregateId,
-      operation,
-    };
-
-    // Use custom extractor if provided
-    if (this.config.events?.eventDataExtractor) {
-      eventData = {
-        ...eventData,
-        ...this.config.events.eventDataExtractor(entity, operation),
-      };
-    }
-
-    return {
-      eventType: eventType as any,
-      eventId: this.generateId(),
-      aggregateId,
-      aggregateType: this.config.entityName,
-      tenantId: anyEntity[this.config.tenantIdField!] || null,
-      userId: anyEntity[this.config.userIdField!] || null,
-      timestamp: new Date(),
-      version: 1,
-      data: eventData,
-      metadata: {
-        correlationId: this.generateId(),
-        source: process.env.SERVICE_NAME || 'unknown-service',
-        ...(this.config.events?.eventMetadata || {}),
-      },
-    };
-  }
-
-  /**
-   * Get pending events that haven't been published
-   */
-  getPendingEvents(): DomainEvent[] {
-    return [...this.pendingEvents];
-  }
-
-  /**
-   * Clear pending events after they're published
-   */
-  clearPendingEvents(): void {
-    this.pendingEvents = [];
-  }
-
-  /**
-   * Publish all pending events in batch
-   */
-  async publishPendingEvents(): Promise<void> {
-    if (this.pendingEvents.length === 0) {
-      return;
-    }
-
-    try {
-      await this.eventPublisher.publishEventsBatch(this.pendingEvents);
-      this.clearPendingEvents();
-      this.logger.debug(`Published ${this.pendingEvents.length} pending events`);
-    } catch (error) {
-      this.logger.error(`Error publishing pending events:`, error);
+      this.logger.error(`Error counting ${this.config.entityName}:`, error);
       throw error;
     }
   }
 
   /**
-   * Generate unique ID
+   * Handle event emission
    */
-  protected generateId(): string {
-    return require('crypto').randomUUID?.() || Math.random().toString(36).substr(2);
+  protected async handleEventEmission(
+    entity: DbEntity,
+    operation: RepositoryOperation,
+  ): Promise<void> {
+    const eventConfig = this.config.events;
+    if (!eventConfig) return;
+
+    // Check if we should publish for this operation
+    const shouldPublish =
+      (operation === 'create' && eventConfig.publishOnCreate) ||
+      (operation === 'update' && eventConfig.publishOnUpdate) ||
+      (operation === 'delete' && eventConfig.publishOnDelete) ||
+      (operation === 'soft-delete' && eventConfig.publishOnSoftDelete) ||
+      (operation === 'restore' && eventConfig.publishOnRestore);
+
+    if (!shouldPublish) return;
+
+    // Apply custom filter if exists
+    if (eventConfig.eventFilter && !eventConfig.eventFilter(entity, operation)) {
+      return;
+    }
+
+    // Determine event type
+    let eventType: string | undefined;
+    switch (operation) {
+      case 'create':
+        eventType = eventConfig.eventTypeOnCreate;
+        break;
+      case 'update':
+        eventType = eventConfig.eventTypeOnUpdate;
+        break;
+      case 'delete':
+        eventType = eventConfig.eventTypeOnDelete;
+        break;
+      case 'soft-delete':
+        eventType = eventConfig.eventTypeOnSoftDelete;
+        break;
+      case 'restore':
+        eventType = eventConfig.eventTypeOnRestore;
+        break;
+    }
+
+    if (!eventType) return;
+
+    // Extract event data
+    const eventData = eventConfig.eventDataExtractor
+      ? eventConfig.eventDataExtractor(entity, operation)
+      : { entityId: (entity as any)[this.config.idField!] };
+
+    // Create domain event
+    const event: DomainEvent = {
+      eventType: eventType as DomainEventType,
+      eventId: randomUUID(),
+      aggregateId: (entity as any)[this.config.idField!],
+      aggregateType: this.config.entityName,
+      tenantId: this.tenantId || undefined,
+      timestamp: new Date(),
+      version: 1,
+      data: eventData,
+      metadata: eventConfig.eventMetadata,
+    };
+
+    // Publish event
+    try {
+      await this.eventPublisher.publishEvent(event);
+      this.logger.debug(`Event published: ${eventType} for ${this.config.entityName}`);
+    } catch (error) {
+      this.logger.error(`Failed to publish event for ${this.config.entityName}:`, error);
+      // Don't throw - event publishing failures shouldn't break CRUD operations
+    }
   }
 }

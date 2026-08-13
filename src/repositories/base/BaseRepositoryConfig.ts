@@ -4,7 +4,7 @@ import { DomainEventType } from '../../types/events';
  * Event filter function type
  * Returns true if event should be published
  */
-export type EventFilter<Entity = any> = (entity: Entity, operation: RepositoryOperation) => boolean;
+export type EventFilter<DbEntity = any> = (entity: DbEntity, operation: RepositoryOperation) => boolean;
 
 /**
  * Repository operations
@@ -12,13 +12,34 @@ export type EventFilter<Entity = any> = (entity: Entity, operation: RepositoryOp
 export type RepositoryOperation = 'create' | 'update' | 'delete' | 'soft-delete' | 'restore';
 
 /**
+ * Mapper functions for converting between DB and Domain entities
+ */
+export interface EntityMappers<DbEntity, DomainEntity> {
+  /**
+   * Convert domain entity to database entity
+   */
+  toDbEntity: (domainEntity: DomainEntity) => Partial<DbEntity>;
+
+  /**
+   * Convert database entity to domain entity
+   */
+  toDomainEntity: (dbEntity: DbEntity) => DomainEntity;
+}
+
+/**
  * Configuration for BaseRepository
  */
-export interface BaseRepositoryConfig<Entity = any> {
+export interface BaseRepositoryConfig<DbEntity = any, DomainEntity = any> {
   /**
    * Entity name (for logging and events)
    */
   entityName: string;
+
+  /**
+   * Mapper functions to convert between DB and Domain entities
+   * If not provided, DB entities will be returned as-is
+   */
+  mappers?: EntityMappers<DbEntity, DomainEntity>;
 
   /**
    * Enable soft delete support
@@ -90,12 +111,12 @@ export interface BaseRepositoryConfig<Entity = any> {
      * @example
      * eventFilter: (user, operation) => operation === 'create' && user.email.endsWith('@admin.com')
      */
-    eventFilter?: EventFilter<Entity>;
+    eventFilter?: EventFilter<DbEntity>;
 
     /**
      * Custom function to extract event data from entity
      */
-    eventDataExtractor?: (entity: Entity, operation: RepositoryOperation) => Record<string, any>;
+    eventDataExtractor?: (entity: DbEntity, operation: RepositoryOperation) => Record<string, any>;
 
     /**
      * Additional metadata to include in events
