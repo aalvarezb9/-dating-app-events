@@ -13,6 +13,7 @@ export * from './services/event-publisher.service';
 export * from './repositories/event-emitting.repository';
 
 // Base Repository System
+export * from './repositories/base/IBaseRepository';
 export * from './repositories/base/BaseRepository';
 export * from './repositories/base/IDatabaseAdapter';
 export * from './repositories/base/BaseRepositoryConfig';

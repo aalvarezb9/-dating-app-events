@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { IDatabaseAdapter, FindCriteria, FindOptions } from './IDatabaseAdapter';
 import { BaseRepositoryConfig, RepositoryOperation } from './BaseRepositoryConfig';
+import { IBaseRepository } from './IBaseRepository';
 import { DomainEvent } from '../../types/events';
 import { EventPublisher } from '../../services/event-publisher.service';
 
@@ -51,7 +52,7 @@ import { EventPublisher } from '../../services/event-publisher.service';
  * }
  * ```
  */
-export class BaseRepository<Entity = any> {
+export class BaseRepository<Entity = any> implements IBaseRepository<Entity> {
   protected readonly logger = new Logger(this.constructor.name);
   protected pendingEvents: DomainEvent[] = [];
 
@@ -65,6 +66,40 @@ export class BaseRepository<Entity = any> {
     this.config.idField = this.config.idField || 'id';
     this.config.tenantIdField = this.config.tenantIdField || 'tenant_id';
     this.config.userIdField = this.config.userIdField || 'user_id';
+  }
+
+  /**
+   * Save entity (create or update based on existence)
+   * This is the main method to use for persisting entities
+   */
+  async save(entity: Partial<Entity>): Promise<void> {
+    try {
+      const idField = this.config.idField!;
+      const entityId = (entity as any)[idField];
+
+      if (!entityId) {
+        throw new Error(`Entity must have ${idField} field to save`);
+      }
+
+      // Check if entity exists
+      const existing = await this.adapter.findById(entityId);
+
+      if (existing) {
+        // Update existing
+        await this.adapter.update(entityId, entity);
+        const updated = await this.adapter.findById(entityId);
+        if (updated) {
+          await this.handleEventEmission(updated, 'update');
+        }
+      } else {
+        // Create new
+        const created = await this.adapter.create(entity);
+        await this.handleEventEmission(created, 'create');
+      }
+    } catch (error) {
+      this.logger.error(`Error saving ${this.config.entityName}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -154,20 +189,34 @@ export class BaseRepository<Entity = any> {
   }
 
   /**
-   * Delete entity permanently
+   * Delete entity permanently (accepts entity or id)
    */
-  async delete(id: string): Promise<void> {
+  async delete(entityOrId: Entity | string): Promise<void> {
     try {
-      const entity = await this.adapter.findById(id);
-      if (!entity) {
-        throw new Error(`${this.config.entityName} with id ${id} not found`);
+      let entity: Entity | null;
+      let id: string;
+
+      // Check if it's an entity object or just an ID
+      if (typeof entityOrId === 'string') {
+        id = entityOrId;
+        entity = await this.adapter.findById(id);
+        if (!entity) {
+          throw new Error(`${this.config.entityName} with id ${id} not found`);
+        }
+      } else {
+        entity = entityOrId;
+        const idField = this.config.idField!;
+        id = (entity as any)[idField];
+        if (!id) {
+          throw new Error(`Entity must have ${idField} field to delete`);
+        }
       }
 
       await this.adapter.delete(id);
 
       await this.handleEventEmission(entity, 'delete');
     } catch (error) {
-      this.logger.error(`Error deleting ${this.config.entityName} with id ${id}:`, error);
+      this.logger.error(`Error deleting ${this.config.entityName}:`, error);
       throw error;
     }
   }
