@@ -8,7 +8,7 @@
     "dev": "tsc --watch",
     "test": "jest",
     "clean": "rm -rf dist",
-    "build": "nest build",
+    "build": "tsc -p tsconfig.json",
     "prepare": "npm run build"
   },
   "keywords": [
