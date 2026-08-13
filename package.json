@@ -1,6 +1,6 @@
 {
   "name": "@dating-app/events",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Event-driven architecture library for Dating App microservices",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,12 +20,14 @@
   ],
   "author": "Dating App Team",
   "license": "MIT",
+  "dependencies": {
+    "typeorm": "^0.3.0"
+  },
   "peerDependencies": {
     "@aws-sdk/client-sns": "^3.0.0",
     "@aws-sdk/client-sqs": "^3.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
     "@nestjs/config": "^3.0.0 || ^4.0.0",
-    "typeorm": "^0.3.0",
     "typescript": "^5.0.0"
   },
   "peerDependenciesMeta": {
@@ -34,16 +36,12 @@
     },
     "@aws-sdk/lib-dynamodb": {
       "optional": true
-    },
-    "typeorm": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1095.0",
     "@aws-sdk/lib-dynamodb": "^3.1095.0",
-    "@types/node": "^20.0.0",
-    "typeorm": "^0.3.0",
-    "typescript": "^5.1.0"
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
   }
 }
