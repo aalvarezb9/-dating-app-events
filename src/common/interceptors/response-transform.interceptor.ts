@@ -48,6 +48,14 @@ export class ResponseTransformInterceptor<T>
                 excludeExtraneousValues: true,
               }),
             };
+          } else if (data && typeof data === 'object' && Array.isArray(data.data)) {
+            // PaginatedResult structure: { data: T[], meta: {...} }
+            transformedData = {
+              ...data,
+              data: plainToInstance(dtoClass, data.data, {
+                excludeExtraneousValues: true,
+              }),
+            };
           } else if (Array.isArray(data)) {
             // Array response - transform each item
             transformedData = plainToInstance(dtoClass, data, {
