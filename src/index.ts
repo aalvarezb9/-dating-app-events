@@ -20,7 +20,8 @@ export type { EntityMappers } from './repositories/base/BaseRepositoryConfig';
 
 // Database Adapters
 export * from './repositories/adapters/PostgresAdapter';
-export * from './repositories/adapters/DynamoDBAdapter';
+// DynamoDB adapter requires @aws-sdk/lib-dynamodb - only export if needed
+// export * from './repositories/adapters/DynamoDBAdapter';
 
 // Decorators
 export * from './decorators/emitable.decorator';
