@@ -40,7 +40,24 @@ import { SharedConfigService } from '../config/env.config';
     SharedConfigModule,
   ],
   providers: [
-    SupabaseJwtStrategy,
+    {
+      provide: 'JWT_STRATEGY',
+      useFactory: (config: SharedConfigService) => {
+        const provider = config.get('AUTH_PROVIDER') || 'supabase';
+
+        switch (provider) {
+          case 'supabase':
+            return new SupabaseJwtStrategy(config);
+          // Future providers:
+          // case 'cognito':
+          //   return new CognitoJwtStrategy(config);
+          default:
+            throw new Error(`Unknown auth provider for JWT: ${provider}`);
+        }
+      },
+      inject: [SharedConfigService],
+    },
+    SupabaseJwtStrategy, // Keep for backward compatibility
     {
       provide: AuthService,
       useFactory: (config: SharedConfigService) => {
