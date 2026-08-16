@@ -69,9 +69,9 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
    */
   async validate(payload: any) {
     // Verify user exists in Supabase Auth
-    const { data: user, error } = await this.supabase.auth.admin.getUserById(payload.sub);
+    const { data, error } = await this.supabase.auth.admin.getUserById(payload.sub);
 
-    if (error || !user) {
+    if (error || !data.user) {
       throw new UnauthorizedException('Invalid token');
     }
 

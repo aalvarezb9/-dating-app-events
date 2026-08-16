@@ -1,12 +1,17 @@
 import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { SupabaseJwtStrategy } from './supabase-jwt.strategy';
+import { SupabaseAuthService } from './supabase-auth.service';
 import { SharedConfigModule } from '../config/shared-config.module';
 
 /**
  * Auth Module
  *
- * Provides Supabase JWT authentication strategy for all services.
+ * Provides Supabase authentication services for all microservices.
+ *
+ * Exports:
+ * - SupabaseJwtStrategy: JWT validation strategy
+ * - SupabaseAuthService: Auth operations (signUp, signIn, etc.)
  *
  * @example
  * ```typescript
@@ -26,7 +31,7 @@ import { SharedConfigModule } from '../config/shared-config.module';
     PassportModule.register({ defaultStrategy: 'supabase-jwt' }),
     SharedConfigModule,
   ],
-  providers: [SupabaseJwtStrategy],
-  exports: [SupabaseJwtStrategy, PassportModule],
+  providers: [SupabaseJwtStrategy, SupabaseAuthService],
+  exports: [SupabaseJwtStrategy, SupabaseAuthService, PassportModule],
 })
 export class AuthModule {}

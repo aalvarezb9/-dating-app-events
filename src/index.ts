@@ -37,6 +37,7 @@ export * from './storage/supabase-storage.service';
 
 // Auth
 export * from './auth/supabase-jwt.strategy';
+export * from './auth/supabase-auth.service';
 export * from './auth/auth.module';
 
 // Cache
