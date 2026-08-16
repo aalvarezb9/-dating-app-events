@@ -33,12 +33,10 @@ export * from './config/env.config';
 export * from './config/shared-config.module';
 
 // Storage
-export * from './storage/supabase-storage.service';
+export * from './storage';
 
 // Auth
-export * from './auth/supabase-jwt.strategy';
-export * from './auth/supabase-auth.service';
-export * from './auth/auth.module';
+export * from './auth';
 
 // Cache
 export * from './cache/redis-cache.module';

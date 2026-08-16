@@ -1,24 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { SharedConfigService } from '../config/env.config';
-
-export interface UploadResult {
-  url: string;
-  path: string;
-  bucket: string;
-}
-
-export interface UploadOptions {
-  contentType?: string;
-  upsert?: boolean;
-  cacheControl?: string;
-}
+import { SharedConfigService } from '../../config/env.config';
+import {
+  FileStorageService,
+  FileUploadResult,
+  UploadFileOptions,
+  ListFilesOptions,
+} from '../file-storage.interface';
 
 /**
- * Supabase Storage Service
+ * Supabase Storage Strategy
  *
- * Provides file upload, download, and management functionality using Supabase Storage.
- * Replaces AWS S3 in the Railway + Supabase stack.
+ * Implementation of FileStorageService for Supabase Storage.
+ * Maps generic file storage operations to Supabase-specific API calls.
  *
  * Features:
  * - Public and private buckets
@@ -31,7 +25,7 @@ export interface UploadOptions {
  * ```typescript
  * @Injectable()
  * export class LandingPageService {
- *   constructor(private storageService: SupabaseStorageService) {}
+ *   constructor(private storageService: FileStorageService) {}
  *
  *   async uploadHeroImage(tenantId: string, file: Buffer) {
  *     const result = await this.storageService.uploadFile(
@@ -46,11 +40,12 @@ export interface UploadOptions {
  * ```
  */
 @Injectable()
-export class SupabaseStorageService {
+export class SupabaseStorageStrategy extends FileStorageService {
   private readonly supabase: SupabaseClient;
-  private readonly logger = new Logger(SupabaseStorageService.name);
+  private readonly logger = new Logger(SupabaseStorageStrategy.name);
 
   constructor(private config: SharedConfigService) {
+    super();
     const supabaseConfig = this.config.supabase;
 
     this.supabase = createClient(
@@ -58,7 +53,7 @@ export class SupabaseStorageService {
       supabaseConfig.serviceRoleKey, // Use service role for backend operations
     );
 
-    this.logger.log(`SupabaseStorageService initialized: ${supabaseConfig.storageUrl}`);
+    this.logger.log(`SupabaseStorageStrategy initialized: ${supabaseConfig.storageUrl}`);
   }
 
   /**
@@ -74,8 +69,8 @@ export class SupabaseStorageService {
     bucket: string,
     filePath: string,
     file: Buffer,
-    options?: UploadOptions
-  ): Promise<UploadResult> {
+    options?: UploadFileOptions,
+  ): Promise<FileUploadResult> {
     try {
       const { data, error } = await this.supabase.storage
         .from(bucket)
@@ -97,7 +92,6 @@ export class SupabaseStorageService {
       return {
         url: publicUrl,
         path: data.path,
-        bucket,
       };
     } catch (error: any) {
       this.logger.error(`Upload error: ${error.message}`);
