@@ -32,6 +32,17 @@ export class PaginationDto {
   }
 }
 
+/**
+ * Interface for pagination query parameters
+ */
+export interface PaginationQuery {
+  page?: number;
+  limit?: number;
+  skip?: number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+}
+
 export interface PaginatedResult<T> {
   data: T[];
   meta: {

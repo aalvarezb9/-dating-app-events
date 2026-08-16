@@ -5,6 +5,9 @@ import { DomainEvent, DomainEventType } from '../../types/events';
 import { EventPublisher } from '../../services/event-publisher.service';
 import { ExecutionContext } from '../../common/context/execution-context.service';
 import { randomUUID } from 'crypto';
+import { PaginationQuery, PaginatedResult, createPaginatedResult } from '../../common/dto/pagination.dto';
+import { DynamicFilters, FilterOperator } from '../../common/dto/filterable-query.dto';
+import { Between, MoreThanOrEqual, LessThanOrEqual, In, Not, Like, ILike } from 'typeorm';
 
 /**
  * Base repository class with DDD support and automatic tenant isolation
@@ -382,6 +385,146 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       return await this.adapter.count(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error counting ${this.config.entityName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert dynamic filters to TypeORM find conditions
+   *
+   * Supports operators:
+   * - $eq: Equal
+   * - $ne: Not equal
+   * - $gt: Greater than
+   * - $gte: Greater than or equal
+   * - $lt: Less than
+   * - $lte: Less than or equal
+   * - $between: Between two values
+   * - $in: In array
+   * - $notIn: Not in array
+   * - $like: Like pattern
+   * - $ilike: Case-insensitive like
+   */
+  protected buildTypeOrmConditions(filters: DynamicFilters): FindCriteria {
+    const conditions: FindCriteria = {};
+
+    for (const [field, value] of Object.entries(filters)) {
+      // Skip undefined values
+      if (value === undefined) {
+        continue;
+      }
+
+      // Direct value (equality)
+      if (typeof value !== 'object' || value === null || value instanceof Date) {
+        conditions[field] = value;
+        continue;
+      }
+
+      // Handle operators
+      const filterObj = value as FilterOperator;
+
+      if ('$eq' in filterObj) {
+        conditions[field] = filterObj.$eq;
+      } else if ('$ne' in filterObj) {
+        conditions[field] = Not(filterObj.$ne);
+      } else if ('$gt' in filterObj) {
+        conditions[field] = MoreThanOrEqual(filterObj.$gt);
+      } else if ('$gte' in filterObj) {
+        conditions[field] = MoreThanOrEqual(filterObj.$gte);
+      } else if ('$lt' in filterObj) {
+        conditions[field] = LessThanOrEqual(filterObj.$lt);
+      } else if ('$lte' in filterObj) {
+        conditions[field] = LessThanOrEqual(filterObj.$lte);
+      } else if ('$between' in filterObj) {
+        const [start, end] = filterObj.$between;
+        conditions[field] = Between(start, end);
+      } else if ('$in' in filterObj) {
+        conditions[field] = In(filterObj.$in);
+      } else if ('$notIn' in filterObj) {
+        conditions[field] = Not(In(filterObj.$notIn));
+      } else if ('$like' in filterObj) {
+        conditions[field] = Like(filterObj.$like);
+      } else if ('$ilike' in filterObj) {
+        conditions[field] = ILike(filterObj.$ilike);
+      }
+    }
+
+    return conditions;
+  }
+
+  /**
+   * Find many with pagination and dynamic filters
+   *
+   * This method handles:
+   * - Automatic tenant filtering
+   * - Dynamic filters with operators ($gte, $between, etc.)
+   * - Sorting
+   * - Pagination
+   * - Total count
+   *
+   * @example
+   * ```typescript
+   * const result = await repository.findManyWithPagination(
+   *   {
+   *     rating: { $gte: 4 },           // rating >= 4
+   *     status: 'COMPLETED',           // status = 'COMPLETED'
+   *     createdAt: { $between: [start, end] }  // createdAt BETWEEN start AND end
+   *   },
+   *   {
+   *     page: 1,
+   *     limit: 10,
+   *     sortBy: 'createdAt',
+   *     sortOrder: 'DESC'
+   *   }
+   * );
+   * // Returns: { data: [...], meta: { page, limit, total, ... } }
+   * ```
+   *
+   * @param filters - Dynamic filters (supports operators)
+   * @param pagination - Pagination and sorting options
+   * @param bypassTenantFilter - Skip tenant filtering for cross-tenant queries
+   * @returns Paginated result with data and metadata
+   */
+  async findManyWithPagination(
+    filters: DynamicFilters = {},
+    pagination: PaginationQuery = {},
+    bypassTenantFilter = false,
+  ): Promise<PaginatedResult<DomainEntity>> {
+    try {
+      const { page = 1, limit = 10, sortBy, sortOrder = 'DESC' } = pagination;
+      const skip = (page - 1) * limit;
+
+      // Build TypeORM conditions from dynamic filters
+      const conditions = this.buildTypeOrmConditions(filters);
+
+      // Add tenant filter
+      const filteredConditions = this.addTenantFilter(conditions, bypassTenantFilter);
+
+      // Build order clause
+      const order: any = sortBy ? { [sortBy]: sortOrder } : undefined;
+
+      // Access the underlying TypeORM repository
+      const repository = (this.adapter as any).repository;
+
+      if (!repository || !repository.findAndCount) {
+        throw new Error('Pagination requires TypeORM repository adapter');
+      }
+
+      // Execute query with pagination
+      const [data, total] = await repository.findAndCount({
+        where: filteredConditions,
+        take: limit,
+        skip,
+        order,
+      });
+
+      // Map to domain entities
+      const domainData = data.map((item: DbEntity) => this.toDomain(item));
+
+      // Return paginated result
+      return createPaginatedResult(domainData, total, { page, limit } as any);
+    } catch (error) {
+      this.logger.error(`Error in findManyWithPagination for ${this.config.entityName}:`, error);
       throw error;
     }
   }
