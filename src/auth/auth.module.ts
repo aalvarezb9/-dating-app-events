@@ -4,6 +4,7 @@ import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { AuthService } from './auth-service.interface';
 import { SupabaseAuthStrategy } from './strategies/supabase-auth.strategy';
 import { SharedConfigModule } from '../config/shared-config.module';
+import { SharedConfigService } from '../config/env.config';
 
 /**
  * Auth Module

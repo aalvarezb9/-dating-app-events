@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { SharedConfigService } from '../config/env.config';
+import { SharedConfigService } from '../../config/env.config';
 
 /**
  * Supabase JWT Strategy
