@@ -1,57 +1,30 @@
-import { Module, DynamicModule, Global } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { EventPublisher, EventPublisherConfig } from './services/event-publisher.service';
+import { Module, Global } from '@nestjs/common';
+import { EventPublisher } from './services/event-publisher.service';
+import { SharedConfigModule } from './config/shared-config.module';
 
 /**
  * Global Events Module for Dating App
  * Provides event publishing capabilities to all microservices
+ *
+ * Uses SharedConfigModule for environment configuration.
+ *
+ * @example
+ * ```typescript
+ * // In app.module.ts
+ * @Module({
+ *   imports: [
+ *     SharedConfigModule,
+ *     EventsModule,
+ *     ...
+ *   ],
+ * })
+ * export class AppModule {}
+ * ```
  */
 @Global()
 @Module({
-  imports: [ConfigModule],
+  imports: [SharedConfigModule],
   providers: [EventPublisher],
   exports: [EventPublisher],
 })
-export class EventsModule {
-  /**
-   * Register module with custom configuration
-   * @param config - EventPublisherConfig
-   */
-  static register(config: EventPublisherConfig): DynamicModule {
-    return {
-      module: EventsModule,
-      imports: [ConfigModule],
-      providers: [
-        {
-          provide: 'EVENT_PUBLISHER_CONFIG',
-          useValue: config,
-        },
-        EventPublisher,
-      ],
-      exports: [EventPublisher],
-      global: true,
-    };
-  }
-
-  /**
-   * Register module with async configuration
-   * Useful when config comes from environment or external service
-   */
-  static registerAsync(
-    configFactory: () => Promise<EventPublisherConfig>,
-  ): DynamicModule {
-    return {
-      module: EventsModule,
-      imports: [ConfigModule],
-      providers: [
-        {
-          provide: 'EVENT_PUBLISHER_CONFIG',
-          useFactory: configFactory,
-        },
-        EventPublisher,
-      ],
-      exports: [EventPublisher],
-      global: true,
-    };
-  }
-}
+export class EventsModule {}

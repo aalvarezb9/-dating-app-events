@@ -28,5 +28,19 @@ export * from './decorators/emitable.decorator';
 // Modules
 export * from './events.module';
 
+// Configuration
+export * from './config/env.config';
+export * from './config/shared-config.module';
+
+// Storage
+export * from './storage/supabase-storage.service';
+
+// Auth
+export * from './auth/supabase-jwt.strategy';
+export * from './auth/auth.module';
+
+// Cache
+export * from './cache/redis-cache.module';
+
 // Common Module (decorators, guards, interceptors, filters, DTOs, pipes)
 export * from './common';

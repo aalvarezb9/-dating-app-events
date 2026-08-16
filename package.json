@@ -1,7 +1,7 @@
 {
   "name": "@dating-app/events",
-  "version": "1.0.4",
-  "description": "Event-driven architecture library for Dating App microservices",
+  "version": "2.0.0",
+  "description": "Event-driven architecture library for Dating App microservices (Railway + Supabase)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -14,25 +14,29 @@
   "keywords": [
     "event-driven",
     "microservices",
-    "sqs",
-    "sns",
-    "serverless"
+    "redis",
+    "supabase",
+    "railway"
   ],
   "files": ["dist"],
   "author": "Dating App Team",
   "license": "MIT",
   "peerDependencies": {
-    "@aws-sdk/client-sns": "^3.0.0",
-    "@aws-sdk/client-sqs": "^3.0.0",
+    "@nestjs/cache-manager": "^3.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
     "@nestjs/config": "^3.0.0 || ^4.0.0",
     "@nestjs/core": "^10.0.0 || ^11.0.0",
+    "@nestjs/microservices": "^10.0.0 || ^11.0.0",
     "@nestjs/passport": "^10.0.0 || ^11.0.0",
     "@nestjs/swagger": "^11.0.0",
     "@nestjs/typeorm": "^10.0.0 || ^11.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "cache-manager": "^6.0.0",
+    "cache-manager-redis-yet": "^5.0.0",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
     "express": "^4.0.0 || ^5.0.0",
+    "passport-jwt": "^4.0.0",
     "typeorm": "^0.3.0",
     "typescript": "^5.0.0"
   },
@@ -42,6 +46,12 @@
     },
     "@aws-sdk/lib-dynamodb": {
       "optional": true
+    },
+    "@aws-sdk/client-sns": {
+      "optional": true
+    },
+    "@aws-sdk/client-sqs": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -49,16 +59,23 @@
     "@aws-sdk/client-sns": "^3.0.0",
     "@aws-sdk/client-sqs": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.1095.0",
+    "@nestjs/cache-manager": "^3.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.1.29",
+    "@nestjs/microservices": "^11.0.0",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/swagger": "^11.4.6",
     "@nestjs/typeorm": "^11.0.3",
+    "@supabase/supabase-js": "^2.0.0",
     "@types/express": "^5.0.6",
     "@types/node": "^20.19.43",
+    "@types/passport-jwt": "^4.0.0",
+    "cache-manager": "^6.0.0",
+    "cache-manager-redis-yet": "^5.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "passport-jwt": "^4.0.0",
     "typeorm": "^0.3.30",
     "typescript": "^5.9.3"
   }
