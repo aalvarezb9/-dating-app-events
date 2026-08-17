@@ -18,6 +18,7 @@ import { Between, MoreThanOrEqual, LessThanOrEqual, In, Not, Like, ILike } from 
  * - Domain event emission
  * - Soft delete support
  * - Entity mapping (DB ↔ Domain)
+ * - Separated save() and update() methods for clarity
  *
  * @template DbEntity - Database entity type (TypeORM, Prisma, etc.)
  * @template DomainEntity - Domain entity type (DDD entities)
@@ -43,6 +44,16 @@ import { Between, MoreThanOrEqual, LessThanOrEqual, In, Not, Like, ILike } from 
  *       },
  *       events: { ... }
  *     });
+ *   }
+ *
+ *   // Creating a new subdomain
+ *   async createSubdomain(domain: Subdomain): Promise<Subdomain> {
+ *     return await this.save(domain); // Use save() for CREATE
+ *   }
+ *
+ *   // Updating an existing subdomain
+ *   async updateSubdomain(id: string, domain: Subdomain): Promise<Subdomain> {
+ *     return await this.update(id, domain); // Use update() for UPDATE
  *   }
  *
  *   // Cross-tenant operation example
@@ -145,31 +156,26 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   }
 
   /**
-   * Save entity (create or update)
-   * Automatically filters by tenant
+   * Save entity (create only)
+   * Use this method when creating a new entity from a domain entity
+   * Automatically adds tenant ID
+   *
+   * NOTE: This method is for CREATE operations only.
+   * For updates, use the update() method instead.
    */
   async save(entity: DomainEntity): Promise<DomainEntity> {
     try {
       const dbEntity = this.toDb(entity);
-      const idField = this.config.idField!;
-      const entityId = (dbEntity as any)[idField];
+      const tenantField = this.config.tenantIdField!;
 
-      if (!entityId) {
-        throw new Error(`Entity must have ${idField} field to save`);
-      }
+      // Ensure tenant ID is set
+      const entityWithTenant = {
+        ...dbEntity,
+        [tenantField]: this.getTenantId(),
+      } as Partial<DbEntity>;
 
-      // Add tenant filter
-      const criteria = this.addTenantFilter({ [idField]: entityId } as any);
-      const existing = await this.adapter.findOne(criteria);
-
-      let result: DbEntity;
-      if (existing) {
-        result = await this.adapter.update(entityId, dbEntity);
-        await this.handleEventEmission(result, 'update');
-      } else {
-        result = await this.adapter.create(dbEntity);
-        await this.handleEventEmission(result, 'create');
-      }
+      const result = await this.adapter.create(entityWithTenant);
+      await this.handleEventEmission(result, 'create');
 
       return this.toDomain(result);
     } catch (error) {
@@ -261,10 +267,18 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   }
 
   /**
-   * Update entity by ID
-   * Automatically filters by tenant
+   * Update entity by ID (update only)
+   * Use this method when updating an existing entity
+   * Automatically filters by tenant to ensure tenant isolation
+   *
+   * NOTE: This method is for UPDATE operations only.
+   * For creating new entities, use the save() or create() method instead.
+   *
+   * @param id - Entity ID to update
+   * @param partialEntity - Partial entity data to update (can be Partial<DbEntity> or DomainEntity)
+   * @throws Error if entity not found for this tenant
    */
-  async update(id: string, partialEntity: Partial<DbEntity>): Promise<DomainEntity> {
+  async update(id: string, partialEntity: Partial<DbEntity> | DomainEntity): Promise<DomainEntity> {
     try {
       // Verify entity belongs to tenant
       const existing = await this.findById(id);
@@ -272,7 +286,15 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         throw new Error(`${this.config.entityName} with id ${id} not found for this tenant`);
       }
 
-      const result = await this.adapter.update(id, partialEntity);
+      // If partialEntity is a domain entity, convert it to DB entity
+      let dbPartialEntity: Partial<DbEntity>;
+      if (this.isDomainEntity(partialEntity)) {
+        dbPartialEntity = this.toDb(partialEntity as DomainEntity);
+      } else {
+        dbPartialEntity = partialEntity as Partial<DbEntity>;
+      }
+
+      const result = await this.adapter.update(id, dbPartialEntity);
       await this.handleEventEmission(result, 'update');
 
       return this.toDomain(result);
@@ -280,6 +302,16 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       this.logger.error(`Error updating ${this.config.entityName} with id ${id}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Helper to determine if an entity is a domain entity
+   * This is a simple heuristic - override in subclasses if needed
+   */
+  private isDomainEntity(entity: any): boolean {
+    // If mappers are configured, assume it could be a domain entity
+    // Check if it has methods (domain entities typically have methods)
+    return this.config.mappers !== undefined && typeof entity === 'object' && entity !== null;
   }
 
   /**
