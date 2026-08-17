@@ -56,18 +56,7 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
 
     this.supabase = createClient(
       supabaseConfig.url,
-      supabaseConfig.serviceRoleKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-        global: {
-          headers: {
-            'X-Client-Info': 'supabase-js-node',
-          },
-        },
-      },
+      supabaseConfig.serviceRoleKey
     );
   }
 
