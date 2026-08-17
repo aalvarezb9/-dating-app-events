@@ -21,6 +21,9 @@
   "files": ["dist"],
   "author": "Dating App Team",
   "license": "MIT",
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
   "peerDependencies": {
     "@nestjs/cache-manager": "^3.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
@@ -78,7 +81,6 @@
     "class-validator": "^0.14.4",
     "passport-jwt": "^4.0.0",
     "typeorm": "^0.3.30",
-    "typescript": "^5.9.3",
-    "ws": "^8.14.2"
+    "typescript": "^5.9.3"
   }
 }
