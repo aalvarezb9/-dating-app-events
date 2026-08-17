@@ -49,6 +49,8 @@ export function ApiStandardResponse<TModel extends Type<any>>(
               totalPages: { type: 'number', example: 10 },
               hasNextPage: { type: 'boolean', example: true },
               hasPreviousPage: { type: 'boolean', example: false },
+              currentPage: { type: 'number', example: 1 },
+              nextPage: { type: 'number', example: 2, nullable: true },
             },
           },
         },

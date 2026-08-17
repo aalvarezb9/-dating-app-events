@@ -52,6 +52,8 @@ export interface PaginatedResult<T> {
     totalPages: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
+    currentPage: number;
+    nextPage: number | null;
   };
 }
 
@@ -61,6 +63,7 @@ export function createPaginatedResult<T>(
   pagination: PaginationDto,
 ): PaginatedResult<T> {
   const totalPages = Math.ceil(total / pagination.limit);
+  const hasNextPage = pagination.page < totalPages;
 
   return {
     data,
@@ -69,8 +72,10 @@ export function createPaginatedResult<T>(
       limit: pagination.limit,
       total,
       totalPages,
-      hasNextPage: pagination.page < totalPages,
+      hasNextPage,
       hasPreviousPage: pagination.page > 1,
+      currentPage: pagination.page,
+      nextPage: hasNextPage ? pagination.page + 1 : null,
     },
   };
 }
