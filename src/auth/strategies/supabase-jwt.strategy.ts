@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SharedConfigService } from '../../config/env.config';
+import WebSocket from 'ws';
 
 /**
  * Supabase JWT Strategy
@@ -57,6 +58,11 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
     this.supabase = createClient(
       supabaseConfig.url,
       supabaseConfig.serviceRoleKey,
+      {
+        realtime: {
+          transport: WebSocket as any,
+        },
+      },
     );
   }
 
