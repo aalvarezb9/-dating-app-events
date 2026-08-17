@@ -163,16 +163,16 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    * NOTE: This method is for CREATE operations only.
    * For updates, use the update() method instead.
    */
-  async save(entity: DomainEntity): Promise<DomainEntity> {
+  async save(entity: DomainEntity, bypassTenantFilter = false): Promise<DomainEntity> {
     try {
       const dbEntity = this.toDb(entity);
       const tenantField = this.config.tenantIdField!;
 
       // Ensure tenant ID is set
-      const entityWithTenant = {
-        ...dbEntity,
-        [tenantField]: this.getTenantId(),
+      let entityWithTenant = {
+        ...dbEntity
       } as Partial<DbEntity>;
+      if (!bypassTenantFilter) entityWithTenant = {...entityWithTenant, [tenantField]: this.getTenantId()};
 
       const result = await this.adapter.create(entityWithTenant);
       await this.handleEventEmission(result, 'create');
