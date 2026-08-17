@@ -3,3 +3,4 @@ export * from './current-tenant.decorator';
 export * from './roles.decorator';
 export * from './public.decorator';
 export * from './use-dto.decorator';
+export * from './api-standard-response.decorator';
