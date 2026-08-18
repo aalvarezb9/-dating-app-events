@@ -44,3 +44,7 @@ export * from './cache/redis-cache.module';
 
 // Common Module (decorators, guards, interceptors, filters, DTOs, pipes)
 export * from './common';
+
+
+// Database Utilities
+export * from './database/transaction-manager';
