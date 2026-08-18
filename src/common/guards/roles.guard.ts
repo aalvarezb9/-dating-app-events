@@ -10,7 +10,6 @@ export class RolesGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     // Check if route is public
-    console.log('[REQUEST CONTEXT]', context.switchToHttp().getRequest())
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -26,6 +25,8 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
+    console.log('[REQUEST CONTEXT] requiredRoles', requiredRoles)
+
     // If no roles are required, allow access (authenticated users only, checked by JwtAuthGuard)
     if (!requiredRoles || requiredRoles.length === 0) {
       return true;
@@ -33,12 +34,14 @@ export class RolesGuard implements CanActivate {
 
     // Check if user has required role
     const { user } = context.switchToHttp().getRequest();
+    console.log('[REQUEST CONTEXT] user', user)
 
     if (!user) {
       throw new ForbiddenException('User not authenticated');
     }
 
     const hasRole = requiredRoles.some((role: UserRole) => user.role === role);
+    console.log('[REQUEST CONTEXT] hasRole', hasRole)
 
     if (!hasRole) {
       throw new ForbiddenException(
