@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
 import { DomainEvent, DomainEventType } from '../types/events';
 import { SharedConfigService } from '../config/env.config';
@@ -32,10 +32,11 @@ import { randomUUID } from 'crypto';
  * ```
  */
 @Injectable()
-export class EventPublisher implements OnModuleDestroy {
+export class EventPublisher implements OnModuleInit, OnModuleDestroy {
   private client: ClientProxy;
   private readonly logger = new Logger(EventPublisher.name);
   private isConnected = false;
+  private connectionPromise: Promise<void> | null = null;
 
   constructor(private config: SharedConfigService) {
     const redisConfig = this.config.redis;
@@ -51,12 +52,17 @@ export class EventPublisher implements OnModuleDestroy {
       },
     });
 
-    // Connect on initialization
-    this.connect();
-
     this.logger.log(
       `EventPublisher initialized with Redis at ${redisConfig.host}:${redisConfig.port}`
     );
+  }
+
+  /**
+   * OnModuleInit lifecycle hook
+   * Ensures Redis connection is established before the module is ready
+   */
+  async onModuleInit() {
+    await this.connect();
   }
 
   /**
@@ -64,15 +70,23 @@ export class EventPublisher implements OnModuleDestroy {
    * Called automatically on module initialization
    */
   private async connect(): Promise<void> {
-    try {
-      await this.client.connect();
-      this.isConnected = true;
-      this.logger.log('EventPublisher connected to Redis successfully');
-    } catch (error: any) {
-      this.isConnected = false;
-      this.logger.error(`Failed to connect to Redis: ${error.message}`);
-      // Don't throw - allow service to start even if Redis is temporarily unavailable
+    if (this.connectionPromise) {
+      return this.connectionPromise;
     }
+
+    this.connectionPromise = (async () => {
+      try {
+        await this.client.connect();
+        this.isConnected = true;
+        this.logger.log('EventPublisher connected to Redis successfully');
+      } catch (error: any) {
+        this.isConnected = false;
+        this.logger.error(`Failed to connect to Redis: ${error.message}`);
+        // Don't throw - allow service to start even if Redis is temporarily unavailable
+      }
+    })();
+
+    return this.connectionPromise;
   }
 
   /**
