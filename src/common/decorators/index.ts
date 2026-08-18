@@ -4,4 +4,5 @@ export * from './roles.decorator';
 export * from './public.decorator';
 export * from './cross-tenant.decorator';
 export * from './use-dto.decorator';
+export * from './include-deleted.decorator';
 export * from './api-standard-response.decorator';

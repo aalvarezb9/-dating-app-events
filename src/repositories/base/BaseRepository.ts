@@ -76,10 +76,11 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
     protected readonly config: BaseRepositoryConfig<DbEntity, DomainEntity>,
   ) {
     // Set defaults
-    this.config.softDeleteField = this.config.softDeleteField || 'deleted_at';
+    this.config.enableSoftDelete = this.config.enableSoftDelete !== false;
+    this.config.softDeleteField = this.config.softDeleteField || 'deletedAt';
     this.config.idField = this.config.idField || 'id';
     this.config.tenantIdField = this.config.tenantIdField || 'tenantId';
-    this.config.userIdField = this.config.userIdField || 'user_id';
+    this.config.userIdField = this.config.userIdField || 'userId';
   }
 
   /**
@@ -145,6 +146,28 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
     return {
       ...criteria,
       [tenantField]: tenantId,
+    };
+  }
+
+   /**
+     * Add soft-delete filter to criteria (exclude deleted records)
+     * Can be bypassed with @IncludeDeleted decorator
+     * @param criteria - Search criteria
+     */
+   private addSoftDeleteFilter(criteria: FindCriteria = {}): FindCriteria {
+    // Skip if @IncludeDeleted is active
+    if (ExecutionContext.isIncludeDeleted()) {
+      return criteria;
+    }
+
+    // Skip if soft-delete is disabled
+    if (!this.config.enableSoftDelete || !this.config.softDeleteField) {
+      return criteria;
+    }
+
+    return {
+      ...criteria,
+      [this.config.softDeleteField]: null as any, // Only non-deleted
     };
   }
 
@@ -233,7 +256,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   async findById(id: string): Promise<DomainEntity | null> {
     try {
       const criteria = this.addTenantFilter({ [this.config.idField!]: id } as any);
-      const result = await this.adapter.findOne(criteria);
+      const filteredCriteria = this.addSoftDeleteFilter(criteria);
+      const result = await this.adapter.findOne(filteredCriteria);
       return result ? this.toDomain(result) : null;
     } catch (error) {
       this.logger.error(`Error finding ${this.config.entityName} by id ${id}:`, error);
@@ -247,7 +271,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    */
   async findOne(criteria: FindCriteria = {}): Promise<DomainEntity | null> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      let filteredCriteria = this.addTenantFilter(criteria);
+      filteredCriteria = this.addSoftDeleteFilter(filteredCriteria);
       const result = await this.adapter.findOne(filteredCriteria);
       return result ? this.toDomain(result) : null;
     } catch (error) {
@@ -266,7 +291,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
     options?: FindOptions,
   ): Promise<DomainEntity[]> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      let filteredCriteria = this.addTenantFilter(criteria);
+      filteredCriteria = this.addSoftDeleteFilter(filteredCriteria);
       const results = await this.adapter.findMany(filteredCriteria, options);
       return results.map((r) => this.toDomain(r));
     } catch (error) {
@@ -351,7 +377,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         throw new Error(`${this.config.entityName} with id ${entityId} not found for this tenant`);
       }
 
-      await this.adapter.delete(entityId);
+      await this.softDelete(entityId);
       await this.handleEventEmission(this.toDb(existing) as DbEntity, 'delete');
     } catch (error) {
       this.logger.error(`Error deleting ${this.config.entityName}:`, error);
@@ -413,7 +439,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    */
   async exists(criteria: FindCriteria): Promise<boolean> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      let filteredCriteria = this.addTenantFilter(criteria);
+      filteredCriteria = this.addSoftDeleteFilter(filteredCriteria);
       return await this.adapter.exists(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error checking existence of ${this.config.entityName}:`, error);
@@ -427,7 +454,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    */
   async count(criteria: FindCriteria = {}): Promise<number> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria);
+      let filteredCriteria = this.addTenantFilter(criteria);
+      filteredCriteria = this.addSoftDeleteFilter(filteredCriteria);
       return await this.adapter.count(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error counting ${this.config.entityName}:`, error);
@@ -542,7 +570,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       const conditions = this.buildTypeOrmConditions(filters);
 
       // Add tenant filter
-      const filteredConditions = this.addTenantFilter(conditions);
+      let filteredConditions = this.addTenantFilter(conditions);
+      filteredConditions = this.addSoftDeleteFilter(filteredConditions);
 
       // Build order clause
       const order: any = sortBy ? { [sortBy]: sortOrder } : undefined;

@@ -11,6 +11,7 @@ export interface ExecutionContextData {
   userRoles?: string[];
   isPublic?: boolean;
   isCrossTenant?: boolean;
+  includeDeleted?: boolean;
   [key: string]: any;
 }
 
@@ -121,6 +122,14 @@ export class ExecutionContext {
    */
   static isCrossTenant(): boolean {
     return this.storage.getStore()?.isCrossTenant || false;
+  }
+
+  /**
+   * Check if the current endpoint/class is marked for soft-deleted resources
+   * Returns true if endpoint or class has @IncludeDeleted() decorator, false otherwise
+   */
+  static isIncludeDeleted(): boolean {
+    return this.storage.getStore()?.includeDeleted || false;
   }
 
   /**
