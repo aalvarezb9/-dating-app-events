@@ -99,9 +99,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    * 1. From ExecutionContext (set by ExecutionContextInterceptor)
    * 2. From manually set tenantId (via setTenantId())
    *
-   * @throws Error if no tenant ID is available
+   * @param throwIfMissing - If false, returns null instead of throwing error (for public endpoints)
+   * @throws Error if no tenant ID is available and throwIfMissing is true
    */
-  getTenantId(): string {
+  getTenantId(throwIfMissing = true): string | null {
     // Try ExecutionContext first (recommended approach)
     const contextTenantId = ExecutionContext.getTenantId();
     if (contextTenantId) {
@@ -113,9 +114,13 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       return this.tenantId;
     }
 
-    throw new Error(
-      'Tenant ID not available. Either use ExecutionContextInterceptor globally, or call setTenantId() before performing operations.',
-    );
+    if (throwIfMissing) {
+      throw new Error(
+        'Tenant ID not available. Either use ExecutionContextInterceptor globally, or call setTenantId() before performing operations.',
+      );
+    }
+
+    return null;
   }
 
   /**
@@ -128,10 +133,18 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       return criteria;
     }
 
+    // Try to get tenantId without throwing error (for public endpoints)
+    const tenantId = this.getTenantId(false);
+
+    // If no tenantId available (public endpoint), return criteria without tenant filter
+    if (!tenantId) {
+      return criteria;
+    }
+
     const tenantField = this.config.tenantIdField!;
     return {
       ...criteria,
-      [tenantField]: this.getTenantId(),
+      [tenantField]: tenantId,
     };
   }
 
@@ -158,7 +171,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   /**
    * Save entity (create only)
    * Use this method when creating a new entity from a domain entity
-   * Automatically adds tenant ID
+   * Automatically adds tenant ID if available
    *
    * NOTE: This method is for CREATE operations only.
    * For updates, use the update() method instead.
@@ -168,11 +181,17 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       const dbEntity = this.toDb(entity);
       const tenantField = this.config.tenantIdField!;
 
-      // Ensure tenant ID is set
+      // Ensure tenant ID is set if available
       let entityWithTenant = {
         ...dbEntity
       } as Partial<DbEntity>;
-      if (!bypassTenantFilter) entityWithTenant = {...entityWithTenant, [tenantField]: this.getTenantId()};
+
+      if (!bypassTenantFilter) {
+        const tenantId = this.getTenantId(false);
+        if (tenantId) {
+          entityWithTenant = {...entityWithTenant, [tenantField]: tenantId};
+        }
+      }
 
       const result = await this.adapter.create(entityWithTenant);
       await this.handleEventEmission(result, 'create');
@@ -186,17 +205,18 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
 
   /**
    * Create entity
-   * Automatically adds tenant ID
+   * Automatically adds tenant ID if available
    */
   async create(entity: Partial<DbEntity>): Promise<DomainEntity> {
     try {
       const tenantField = this.config.tenantIdField!;
-      const entityWithTenant = {
-        ...entity,
-        [tenantField]: this.getTenantId(),
-      } as Partial<DbEntity>;
+      const tenantId = this.getTenantId(false);
 
-      const result = await this.adapter.create(entityWithTenant);
+      const entityWithTenant = tenantId
+        ? { ...entity, [tenantField]: tenantId }
+        : { ...entity };
+
+      const result = await this.adapter.create(entityWithTenant as Partial<DbEntity>);
       await this.handleEventEmission(result, 'create');
 
       return this.toDomain(result);
