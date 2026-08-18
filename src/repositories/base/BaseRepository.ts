@@ -129,17 +129,18 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
   private addTenantFilter(criteria: FindCriteria = {}, bypassTenantFilter = false): FindCriteria {
+    // Explicit bypass for cross-tenant operations (e.g., checking subdomain availability globally)
     if (bypassTenantFilter) {
       return criteria;
     }
 
-    // Try to get tenantId without throwing error (for public endpoints)
-    const tenantId = this.getTenantId(false);
-
-    // If no tenantId available (public endpoint), return criteria without tenant filter
-    if (!tenantId) {
+    // Public endpoints don't require tenant filtering
+    if (ExecutionContext.isPublic()) {
       return criteria;
     }
+
+    // Private endpoints MUST have a tenant ID
+    const tenantId = this.getTenantId(true); // Will throw error if missing
 
     const tenantField = this.config.tenantIdField!;
     return {
@@ -186,11 +187,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         ...dbEntity
       } as Partial<DbEntity>;
 
-      if (!bypassTenantFilter) {
-        const tenantId = this.getTenantId(false);
-        if (tenantId) {
-          entityWithTenant = {...entityWithTenant, [tenantField]: tenantId};
-        }
+      if (!bypassTenantFilter && !ExecutionContext.isPublic()) {
+        // Private endpoints MUST have a tenant ID
+        const tenantId = this.getTenantId(true); // Will throw error if missing
+        entityWithTenant = {...entityWithTenant, [tenantField]: tenantId};
       }
 
       const result = await this.adapter.create(entityWithTenant);

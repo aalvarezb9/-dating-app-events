@@ -4,8 +4,10 @@ import {
   ExecutionContext as NestExecutionContext,
   CallHandler,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { ExecutionContext } from '../context/execution-context.service';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { randomUUID } from 'crypto';
 
 /**
@@ -44,9 +46,17 @@ import { randomUUID } from 'crypto';
  */
 @Injectable()
 export class ExecutionContextInterceptor implements NestInterceptor {
+  constructor(private reflector: Reflector) {}
+
   intercept(context: NestExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
+
+    // Read @Public() metadata from the endpoint
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     // Build context data from request
     const contextData = {
@@ -55,6 +65,7 @@ export class ExecutionContextInterceptor implements NestInterceptor {
       userId: user?.id || user?.userId,
       userEmail: user?.email,
       userRoles: user?.roles,
+      isPublic: isPublic || false,
     };
 
     // Run the rest of the request within this context

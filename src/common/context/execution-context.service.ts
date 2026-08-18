@@ -9,6 +9,7 @@ export interface ExecutionContextData {
   requestId?: string;
   userEmail?: string;
   userRoles?: string[];
+  isPublic?: boolean;
   [key: string]: any;
 }
 
@@ -103,6 +104,14 @@ export class ExecutionContext {
    */
   static getUserRoles(): string[] | undefined {
     return this.storage.getStore()?.userRoles;
+  }
+
+  /**
+   * Check if the current endpoint is public
+   * Returns true if endpoint has @Public() decorator, false otherwise
+   */
+  static isPublic(): boolean {
+    return this.storage.getStore()?.isPublic || false;
   }
 
   /**
