@@ -81,7 +81,7 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
       email: payload.email,
       tenantId: payload.app_metadata?.tenantId,
       tenantType: payload.app_metadata?.tenantType,
-      role: payload.role,
+      role: payload.app_metadata?.role || payload.role, // Prefer custom role from app_metadata
     };
   }
 }
