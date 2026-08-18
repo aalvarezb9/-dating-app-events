@@ -126,11 +126,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   /**
    * Add tenant filter to criteria
    * @param criteria - Search criteria
-   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  private addTenantFilter(criteria: FindCriteria = {}, bypassTenantFilter = false): FindCriteria {
-    // Explicit bypass for cross-tenant operations (e.g., checking subdomain availability globally)
-    if (bypassTenantFilter) {
+  private addTenantFilter(criteria: FindCriteria = {}): FindCriteria {
+    // Cross-tenant endpoints/classes bypass tenant filtering
+    if (ExecutionContext.isCrossTenant()) {
       return criteria;
     }
 
@@ -177,7 +176,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    * NOTE: This method is for CREATE operations only.
    * For updates, use the update() method instead.
    */
-  async save(entity: DomainEntity, bypassTenantFilter = false): Promise<DomainEntity> {
+  async save(entity: DomainEntity): Promise<DomainEntity> {
     try {
       const dbEntity = this.toDb(entity);
       const tenantField = this.config.tenantIdField!;
@@ -187,7 +186,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         ...dbEntity
       } as Partial<DbEntity>;
 
-      if (!bypassTenantFilter && !ExecutionContext.isPublic()) {
+      // Only set tenant ID for non-cross-tenant and non-public endpoints
+      if (!ExecutionContext.isCrossTenant() && !ExecutionContext.isPublic()) {
         // Private endpoints MUST have a tenant ID
         const tenantId = this.getTenantId(true); // Will throw error if missing
         entityWithTenant = {...entityWithTenant, [tenantField]: tenantId};
@@ -229,11 +229,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   /**
    * Find by ID
    * @param id - Entity ID
-   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async findById(id: string, bypassTenantFilter = false): Promise<DomainEntity | null> {
+  async findById(id: string): Promise<DomainEntity | null> {
     try {
-      const criteria = this.addTenantFilter({ [this.config.idField!]: id } as any, bypassTenantFilter);
+      const criteria = this.addTenantFilter({ [this.config.idField!]: id } as any);
       const result = await this.adapter.findOne(criteria);
       return result ? this.toDomain(result) : null;
     } catch (error) {
@@ -245,11 +244,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   /**
    * Find one by criteria
    * @param criteria - Search criteria
-   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async findOne(criteria: FindCriteria = {}, bypassTenantFilter = false): Promise<DomainEntity | null> {
+  async findOne(criteria: FindCriteria = {}): Promise<DomainEntity | null> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
+      const filteredCriteria = this.addTenantFilter(criteria);
       const result = await this.adapter.findOne(filteredCriteria);
       return result ? this.toDomain(result) : null;
     } catch (error) {
@@ -262,15 +260,13 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    * Find many by criteria
    * @param criteria - Search criteria
    * @param options - Query options (limit, offset, order)
-   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
   async findMany(
     criteria: FindCriteria = {},
     options?: FindOptions,
-    bypassTenantFilter = false,
   ): Promise<DomainEntity[]> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
+      const filteredCriteria = this.addTenantFilter(criteria);
       const results = await this.adapter.findMany(filteredCriteria, options);
       return results.map((r) => this.toDomain(r));
     } catch (error) {
@@ -414,11 +410,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   /**
    * Check if entity exists
    * @param criteria - Search criteria
-   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async exists(criteria: FindCriteria, bypassTenantFilter = false): Promise<boolean> {
+  async exists(criteria: FindCriteria): Promise<boolean> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
+      const filteredCriteria = this.addTenantFilter(criteria);
       return await this.adapter.exists(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error checking existence of ${this.config.entityName}:`, error);
@@ -429,11 +424,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   /**
    * Count entities
    * @param criteria - Search criteria
-   * @param bypassTenantFilter - If true, skips tenant filtering (for cross-tenant operations)
    */
-  async count(criteria: FindCriteria = {}, bypassTenantFilter = false): Promise<number> {
+  async count(criteria: FindCriteria = {}): Promise<number> {
     try {
-      const filteredCriteria = this.addTenantFilter(criteria, bypassTenantFilter);
+      const filteredCriteria = this.addTenantFilter(criteria);
       return await this.adapter.count(filteredCriteria);
     } catch (error) {
       this.logger.error(`Error counting ${this.config.entityName}:`, error);
@@ -534,13 +528,11 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    *
    * @param filters - Dynamic filters (supports operators)
    * @param pagination - Pagination and sorting options
-   * @param bypassTenantFilter - Skip tenant filtering for cross-tenant queries
    * @returns Paginated result with data and metadata
    */
   async findManyWithPagination(
     filters: DynamicFilters = {},
     pagination: PaginationQuery = {},
-    bypassTenantFilter = false,
   ): Promise<PaginatedResult<DomainEntity>> {
     try {
       const { page = 1, limit = 10, sortBy, sortOrder = 'DESC' } = pagination;
@@ -550,7 +542,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       const conditions = this.buildTypeOrmConditions(filters);
 
       // Add tenant filter
-      const filteredConditions = this.addTenantFilter(conditions, bypassTenantFilter);
+      const filteredConditions = this.addTenantFilter(conditions);
 
       // Build order clause
       const order: any = sortBy ? { [sortBy]: sortOrder } : undefined;

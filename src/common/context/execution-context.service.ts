@@ -10,6 +10,7 @@ export interface ExecutionContextData {
   userEmail?: string;
   userRoles?: string[];
   isPublic?: boolean;
+  isCrossTenant?: boolean;
   [key: string]: any;
 }
 
@@ -112,6 +113,14 @@ export class ExecutionContext {
    */
   static isPublic(): boolean {
     return this.storage.getStore()?.isPublic || false;
+  }
+
+  /**
+   * Check if the current endpoint/class is marked for cross-tenant access
+   * Returns true if endpoint or class has @CrossTenant() decorator, false otherwise
+   */
+  static isCrossTenant(): boolean {
+    return this.storage.getStore()?.isCrossTenant || false;
   }
 
   /**

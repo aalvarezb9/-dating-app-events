@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { ExecutionContext } from '../context/execution-context.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { CROSS_TENANT_KEY } from '../decorators/cross-tenant.decorator';
 import { randomUUID } from 'crypto';
 
 /**
@@ -58,6 +59,12 @@ export class ExecutionContextInterceptor implements NestInterceptor {
       context.getClass(),
     ]);
 
+    // Read @CrossTenant() metadata from the endpoint or class
+    const isCrossTenant = this.reflector.getAllAndOverride<boolean>(CROSS_TENANT_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
     // Build context data from request
     const contextData = {
       requestId: request.id || randomUUID(),
@@ -66,6 +73,7 @@ export class ExecutionContextInterceptor implements NestInterceptor {
       userEmail: user?.email,
       userRoles: user?.roles,
       isPublic: isPublic || false,
+      isCrossTenant: isCrossTenant || false,
     };
 
     // Run the rest of the request within this context
