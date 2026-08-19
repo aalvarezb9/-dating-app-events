@@ -39,12 +39,18 @@ export class PostgresAdapter<Entity extends ObjectLiteral = ObjectLiteral> imple
 
   async update(id: string, partialEntity: Partial<Entity>): Promise<Entity> {
     const idField = this.options!.idField!;
-    await this.repository.update({ [idField]: id } as any, partialEntity as any);
-    const updated = await this.repository.findOne({ where: { [idField]: id } as any } as any);
-    if (!updated) {
-      throw new Error(`Entity with ${idField} ${id} not found after update`);
+
+    // Fetch the existing entity first
+    const existing = await this.repository.findOne({ where: { [idField]: id } as any } as any);
+    if (!existing) {
+      throw new Error(`Entity with ${idField} ${id} not found`);
     }
-    return updated;
+
+    // Merge partial entity with existing (preserves JSONB fields)
+    const merged = this.repository.merge(existing, partialEntity as any);
+
+    // Save the merged entity
+    return await this.repository.save(merged as any) as Entity;
   }
 
   async findOne(criteria: FindCriteria): Promise<Entity | null> {
