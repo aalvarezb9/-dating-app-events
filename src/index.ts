@@ -48,6 +48,7 @@ export * from './common';
 
 // Database Utilities
 export * from './database/transaction-manager';
+export * from './database/advisory-lock-manager';
 
 // Encryption
 export * from './encryption/encryption.service';
