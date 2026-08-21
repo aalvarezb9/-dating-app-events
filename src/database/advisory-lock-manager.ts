@@ -158,7 +158,7 @@ export class AdvisoryLockManager {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       // Rollback on error (releases locks automatically)
       await queryRunner.rollbackTransaction();
 
