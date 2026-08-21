@@ -43,7 +43,7 @@ export class EncryptionService {
 
       // Format: iv:authTag:encrypted
       return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Encryption failed: ${error.message}`);
       throw new Error('Failed to encrypt data');
     }
@@ -74,7 +74,7 @@ export class EncryptionService {
       decrypted += decipher.final('utf8');
 
       return decrypted;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Decryption failed: ${error.message}`);
       throw new Error('Failed to decrypt data');
     }
