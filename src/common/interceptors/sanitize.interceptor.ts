@@ -39,49 +39,56 @@ export class SanitizeInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
 
-    // Sanitize all incoming data sources
+    // Sanitize all incoming data sources (mutate in place, don't reassign)
     if (request.body && typeof request.body === 'object') {
-      request.body = this.sanitizeObject(request.body);
+      this.sanitizeObjectInPlace(request.body);
     }
 
     if (request.query && typeof request.query === 'object') {
-      request.query = this.sanitizeObject(request.query);
+      this.sanitizeObjectInPlace(request.query);
     }
 
     if (request.params && typeof request.params === 'object') {
-      request.params = this.sanitizeObject(request.params);
+      this.sanitizeObjectInPlace(request.params);
     }
 
     return next.handle();
   }
 
   /**
-   * Recursively sanitize an object, array, or string
+   * Recursively sanitize an object IN PLACE (mutate, don't create new object)
+   * This is necessary because request.query and request.params are read-only getters
    */
-  private sanitizeObject(obj: any): any {
-    // Handle strings - sanitize HTML
-    if (typeof obj === 'string') {
-      return this.sanitizeString(obj);
+  private sanitizeObjectInPlace(obj: any): void {
+    if (!obj || typeof obj !== 'object') {
+      return;
     }
 
-    // Handle arrays - sanitize each item
+    // Handle arrays - sanitize each item in place
     if (Array.isArray(obj)) {
-      return obj.map((item) => this.sanitizeObject(item));
-    }
-
-    // Handle objects - sanitize each property
-    if (obj !== null && typeof obj === 'object') {
-      const sanitized: any = {};
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          sanitized[key] = this.sanitizeObject(obj[key]);
+      for (let i = 0; i < obj.length; i++) {
+        if (typeof obj[i] === 'string') {
+          obj[i] = this.sanitizeString(obj[i]);
+        } else if (typeof obj[i] === 'object' && obj[i] !== null) {
+          this.sanitizeObjectInPlace(obj[i]);
         }
       }
-      return sanitized;
+      return;
     }
 
-    // Return primitives as-is (numbers, booleans, null, undefined)
-    return obj;
+    // Handle objects - sanitize each property in place
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        const value = obj[key];
+
+        if (typeof value === 'string') {
+          obj[key] = this.sanitizeString(value);
+        } else if (typeof value === 'object' && value !== null) {
+          this.sanitizeObjectInPlace(value);
+        }
+        // Primitives (numbers, booleans) are left as-is
+      }
+    }
   }
 
   /**
