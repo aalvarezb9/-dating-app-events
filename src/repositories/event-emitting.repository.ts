@@ -96,7 +96,7 @@ export abstract class EventEmittingRepository<Entity = any> {
 
       return result;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error?.message : String(error);
       this.logger.error(`Error saving ${this.config.entityName}: ${errorMessage}`);
       throw error;
     }
@@ -191,7 +191,7 @@ export abstract class EventEmittingRepository<Entity = any> {
       await this.eventPublisher.publishEventsBatch(this.pendingEvents);
       this.clearPendingEvents();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error?.message : String(error);
       this.logger.error(`Error publishing pending events: ${errorMessage}`);
       throw error;
     }

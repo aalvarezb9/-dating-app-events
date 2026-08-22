@@ -164,7 +164,7 @@ export class AdvisoryLockManager {
 
       if (options?.enableLogging) {
         this.logger.error(
-          `Transaction rolled back due to error: ${error.message}`,
+          `Transaction rolled back due to error: ${error?.message}`,
         );
       }
 

@@ -36,7 +36,7 @@ export class LoggingInterceptor implements NestInterceptor {
         error: (error) => {
           const responseTime = Date.now() - now;
           this.logger.error(
-            `← ${method} ${url} | User: ${userEmail} | ${responseTime}ms | Error: ${error.message}`,
+            `← ${method} ${url} | User: ${userEmail} | ${responseTime}ms | Error: ${error?.message}`,
           );
         },
       }),

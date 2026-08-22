@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import * as sanitizeHtml from 'sanitize-html';
+import sanitizeHtml, { IOptions } from 'sanitize-html';
 
 /**
  * Global interceptor to sanitize all incoming request data
@@ -30,7 +30,7 @@ export class SanitizeInterceptor implements NestInterceptor {
   private readonly logger = new Logger(SanitizeInterceptor.name);
 
   // Sanitization config: Strip ALL HTML tags and attributes
-  private readonly sanitizeConfig: sanitizeHtml.IOptions = {
+  private readonly sanitizeConfig: IOptions = {
     allowedTags: [], // Remove ALL HTML tags
     allowedAttributes: {}, // Remove ALL attributes
     disallowedTagsMode: 'recursiveEscape', // Escape instead of removing
@@ -100,8 +100,8 @@ export class SanitizeInterceptor implements NestInterceptor {
       }
 
       return sanitized;
-    } catch (error) {
-      this.logger.error(`Sanitization failed: ${error.message}`);
+    } catch (error: any) {
+      this.logger.error(`Sanitization failed: ${error?.message}`);
       // Return empty string if sanitization fails (fail-safe)
       return '';
     }

@@ -81,8 +81,8 @@ export class SupabaseStorageStrategy extends FileStorageService {
         });
 
       if (error) {
-        this.logger.error(`Upload failed: ${error.message}`, error);
-        throw new Error(`Failed to upload file: ${error.message}`);
+        this.logger.error(`Upload failed: ${error?.message}`, error);
+        throw new Error(`Failed to upload file: ${error?.message}`);
       }
 
       const publicUrl = this.getPublicUrl(bucket, filePath);
@@ -94,7 +94,7 @@ export class SupabaseStorageStrategy extends FileStorageService {
         path: data.path,
       };
     } catch (error: any) {
-      this.logger.error(`Upload error: ${error.message}`);
+      this.logger.error(`Upload error: ${error?.message}`);
       throw error;
     }
   }
@@ -112,13 +112,13 @@ export class SupabaseStorageStrategy extends FileStorageService {
         .remove([filePath]);
 
       if (error) {
-        this.logger.error(`Delete failed: ${error.message}`, error);
-        throw new Error(`Failed to delete file: ${error.message}`);
+        this.logger.error(`Delete failed: ${error?.message}`, error);
+        throw new Error(`Failed to delete file: ${error?.message}`);
       }
 
       this.logger.log(`File deleted successfully: ${bucket}/${filePath}`);
     } catch (error: any) {
-      this.logger.error(`Delete error: ${error.message}`);
+      this.logger.error(`Delete error: ${error?.message}`);
       throw error;
     }
   }
@@ -136,13 +136,13 @@ export class SupabaseStorageStrategy extends FileStorageService {
         .remove(filePaths);
 
       if (error) {
-        this.logger.error(`Batch delete failed: ${error.message}`, error);
-        throw new Error(`Failed to delete files: ${error.message}`);
+        this.logger.error(`Batch delete failed: ${error?.message}`, error);
+        throw new Error(`Failed to delete files: ${error?.message}`);
       }
 
       this.logger.log(`Files deleted successfully: ${bucket}/ (${filePaths.length} files)`);
     } catch (error: any) {
-      this.logger.error(`Batch delete error: ${error.message}`);
+      this.logger.error(`Batch delete error: ${error?.message}`);
       throw error;
     }
   }
@@ -177,13 +177,13 @@ export class SupabaseStorageStrategy extends FileStorageService {
         .createSignedUrl(filePath, expiresIn);
 
       if (error) {
-        this.logger.error(`Failed to generate signed URL: ${error.message}`, error);
-        throw new Error(`Failed to generate signed URL: ${error.message}`);
+        this.logger.error(`Failed to generate signed URL: ${error?.message}`, error);
+        throw new Error(`Failed to generate signed URL: ${error?.message}`);
       }
 
       return data.signedUrl;
     } catch (error: any) {
-      this.logger.error(`Signed URL error: ${error.message}`);
+      this.logger.error(`Signed URL error: ${error?.message}`);
       throw error;
     }
   }
@@ -211,13 +211,13 @@ export class SupabaseStorageStrategy extends FileStorageService {
         });
 
       if (error) {
-        this.logger.error(`List files failed: ${error.message}`, error);
-        throw new Error(`Failed to list files: ${error.message}`);
+        this.logger.error(`List files failed: ${error?.message}`, error);
+        throw new Error(`Failed to list files: ${error?.message}`);
       }
 
       return data;
     } catch (error: any) {
-      this.logger.error(`List files error: ${error.message}`);
+      this.logger.error(`List files error: ${error?.message}`);
       throw error;
     }
   }

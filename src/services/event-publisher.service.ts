@@ -81,7 +81,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
         this.logger.log('EventPublisher connected to Redis successfully');
       } catch (error: any) {
         this.isConnected = false;
-        this.logger.error(`Failed to connect to Redis: ${error.message}`);
+        this.logger.error(`Failed to connect to Redis: ${error?.message}`);
         // Don't throw - allow service to start even if Redis is temporarily unavailable
       }
     })();
@@ -113,7 +113,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
     } catch (error: any) {
       // Log error but do NOT throw - fire-and-forget semantics
       this.logger.error(
-        `Failed to emit event ${event.eventType}: ${error.message}`,
+        `Failed to emit event ${event.eventType}: ${error?.message}`,
         error.stack
       );
     }
@@ -136,7 +136,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
 
       this.logger.debug(`Batch of ${events.length} events emitted`);
     } catch (error: any) {
-      this.logger.error(`Failed to emit event batch: ${error.message}`, error.stack);
+      this.logger.error(`Failed to emit event batch: ${error?.message}`, error.stack);
     }
   }
 
@@ -206,7 +206,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
       this.isConnected = false;
       this.logger.log('EventPublisher disconnected from Redis');
     } catch (error: any) {
-      this.logger.error(`Error closing Redis connection: ${error.message}`);
+      this.logger.error(`Error closing Redis connection: ${error?.message}`);
     }
   }
 }

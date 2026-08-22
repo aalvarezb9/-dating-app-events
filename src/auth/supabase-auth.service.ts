@@ -110,8 +110,8 @@ export class SupabaseAuthService {
       });
 
       if (error) {
-        this.logger.error(`Sign up failed: ${error.message}`, error);
-        throw new BadRequestException(`Failed to create user: ${error.message}`);
+        this.logger.error(`Sign up failed: ${error?.message}`, error);
+        throw new BadRequestException(`Failed to create user: ${error?.message}`);
       }
 
       if (!data.user) {
@@ -125,7 +125,7 @@ export class SupabaseAuthService {
         session: data.session,
       };
     } catch (error: any) {
-      this.logger.error(`Sign up error: ${error.message}`);
+      this.logger.error(`Sign up error: ${error?.message}`);
       throw error;
     }
   }
@@ -145,7 +145,7 @@ export class SupabaseAuthService {
       });
 
       if (error) {
-        this.logger.error(`Sign in failed: ${error.message}`);
+        this.logger.error(`Sign in failed: ${error?.message}`);
         throw new UnauthorizedException('Invalid email or password');
       }
 
@@ -162,7 +162,7 @@ export class SupabaseAuthService {
         refreshToken: data.session.refresh_token,
       };
     } catch (error: any) {
-      this.logger.error(`Sign in error: ${error.message}`);
+      this.logger.error(`Sign in error: ${error?.message}`);
       throw error;
     }
   }
@@ -181,13 +181,13 @@ export class SupabaseAuthService {
       });
 
       if (error) {
-        this.logger.error(`Update metadata failed: ${error.message}`, error);
-        throw new BadRequestException(`Failed to update user metadata: ${error.message}`);
+        this.logger.error(`Update metadata failed: ${error?.message}`, error);
+        throw new BadRequestException(`Failed to update user metadata: ${error?.message}`);
       }
 
       this.logger.log(`User metadata updated: ${userId}`);
     } catch (error: any) {
-      this.logger.error(`Update metadata error: ${error.message}`);
+      this.logger.error(`Update metadata error: ${error?.message}`);
       throw error;
     }
   }
@@ -218,7 +218,7 @@ export class SupabaseAuthService {
         refreshToken: data.session.refresh_token,
       };
     } catch (error: any) {
-      this.logger.error(`Refresh token error: ${error.message}`);
+      this.logger.error(`Refresh token error: ${error?.message}`);
       throw error;
     }
   }
@@ -233,13 +233,13 @@ export class SupabaseAuthService {
       const { error } = await this.supabase.auth.admin.signOut(accessToken);
 
       if (error) {
-        this.logger.error(`Sign out failed: ${error.message}`);
-        throw new BadRequestException(`Failed to sign out: ${error.message}`);
+        this.logger.error(`Sign out failed: ${error?.message}`);
+        throw new BadRequestException(`Failed to sign out: ${error?.message}`);
       }
 
       this.logger.log('User signed out');
     } catch (error: any) {
-      this.logger.error(`Sign out error: ${error.message}`);
+      this.logger.error(`Sign out error: ${error?.message}`);
       throw error;
     }
   }
@@ -255,13 +255,13 @@ export class SupabaseAuthService {
       const { data, error } = await this.supabase.auth.admin.getUserById(userId);
 
       if (error) {
-        this.logger.error(`Get user failed: ${error.message}`);
+        this.logger.error(`Get user failed: ${error?.message}`);
         throw new UnauthorizedException('User not found');
       }
 
       return data.user;
     } catch (error: any) {
-      this.logger.error(`Get user error: ${error.message}`);
+      this.logger.error(`Get user error: ${error?.message}`);
       throw error;
     }
   }
@@ -276,13 +276,13 @@ export class SupabaseAuthService {
       const { error } = await this.supabase.auth.resetPasswordForEmail(email);
 
       if (error) {
-        this.logger.error(`Password reset failed: ${error.message}`);
-        throw new BadRequestException(`Failed to send password reset email: ${error.message}`);
+        this.logger.error(`Password reset failed: ${error?.message}`);
+        throw new BadRequestException(`Failed to send password reset email: ${error?.message}`);
       }
 
       this.logger.log(`Password reset email sent to: ${email}`);
     } catch (error: any) {
-      this.logger.error(`Password reset error: ${error.message}`);
+      this.logger.error(`Password reset error: ${error?.message}`);
       throw error;
     }
   }
@@ -299,13 +299,13 @@ export class SupabaseAuthService {
       });
 
       if (error) {
-        this.logger.error(`Email verification failed: ${error.message}`);
-        throw new BadRequestException(`Failed to verify email: ${error.message}`);
+        this.logger.error(`Email verification failed: ${error?.message}`);
+        throw new BadRequestException(`Failed to verify email: ${error?.message}`);
       }
 
       this.logger.log(`Email verified for user: ${userId}`);
     } catch (error: any) {
-      this.logger.error(`Email verification error: ${error.message}`);
+      this.logger.error(`Email verification error: ${error?.message}`);
       throw error;
     }
   }
@@ -320,13 +320,13 @@ export class SupabaseAuthService {
       const { error } = await this.supabase.auth.admin.deleteUser(userId);
 
       if (error) {
-        this.logger.error(`Delete user failed: ${error.message}`);
-        throw new BadRequestException(`Failed to delete user: ${error.message}`);
+        this.logger.error(`Delete user failed: ${error?.message}`);
+        throw new BadRequestException(`Failed to delete user: ${error?.message}`);
       }
 
       this.logger.log(`User deleted: ${userId}`);
     } catch (error: any) {
-      this.logger.error(`Delete user error: ${error.message}`);
+      this.logger.error(`Delete user error: ${error?.message}`);
       throw error;
     }
   }
