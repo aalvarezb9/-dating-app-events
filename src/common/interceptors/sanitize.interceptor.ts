@@ -78,7 +78,9 @@ export class SanitizeInterceptor implements NestInterceptor {
 
     // Handle objects - sanitize each property in place
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
+      // Use Object.prototype.hasOwnProperty.call() to handle objects without hasOwnProperty
+      // (e.g., request.query which may have null prototype)
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
         const value = obj[key];
 
         if (typeof value === 'string') {
