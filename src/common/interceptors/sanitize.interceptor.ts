@@ -33,7 +33,7 @@ export class SanitizeInterceptor implements NestInterceptor {
   private readonly sanitizeConfig: IOptions = {
     allowedTags: [], // Remove ALL HTML tags
     allowedAttributes: {}, // Remove ALL attributes
-    disallowedTagsMode: 'recursiveEscape', // Escape instead of removing
+    disallowedTagsMode: 'discard', // Remove tags completely
   };
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
