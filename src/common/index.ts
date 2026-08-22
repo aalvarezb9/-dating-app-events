@@ -7,3 +7,4 @@ export * from './interfaces';
 export * from './pipes';
 export * from './types/auth.types';
 export * from './context';
+export * from './constants/currencies';
