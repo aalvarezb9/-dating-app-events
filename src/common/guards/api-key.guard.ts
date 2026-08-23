@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { SharedConfigService } from '../config/env.config';
+import { SharedConfigService } from '../../config/env.config';
 
 /**
  * ApiKeyGuard
