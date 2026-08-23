@@ -45,6 +45,8 @@ export * from './cache/redis-cache.module';
 // Common Module (decorators, guards, interceptors, filters, DTOs, pipes)
 export * from './common';
 
+// HTTP Client (inter-service communication)
+export * from './http-client';
 
 // Database Utilities
 export * from './database/transaction-manager';

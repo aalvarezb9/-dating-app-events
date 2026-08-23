@@ -83,6 +83,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@nestjs/axios": "^4.0.1",
+    "axios": "^1.19.0",
     "rxjs": "^7.8.2",
     "sanitize-html": "^2.17.7"
   }
