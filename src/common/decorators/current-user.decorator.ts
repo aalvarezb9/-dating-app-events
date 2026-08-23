@@ -6,7 +6,7 @@ export interface ICurrentUser {
   tenantType: string;
   email: string;
   role: string;
-  cognitoSub: string;
+  cognitoSub?: string;
 }
 
 export const CurrentUser = createParamDecorator(
