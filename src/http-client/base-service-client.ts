@@ -144,24 +144,6 @@ export abstract class BaseServiceClient {
   }
 
   /**
-   * Unwrap ApiResponse envelope from server response
-   * Server returns: { success: true, data: T, timestamp: string }
-   * This method extracts and returns just the 'data' field
-   */
-  protected unwrapResponse<T>(response: any): T {
-    console.log('[BaseServiceClient.unwrapResponse] Input:', JSON.stringify(response, null, 2));
-    // Check if response is wrapped in ApiResponse format
-    if (response && typeof response === 'object' && 'success' in response && 'data' in response) {
-      const unwrapped = response.data as T;
-      console.log('[BaseServiceClient.unwrapResponse] Unwrapped:', JSON.stringify(unwrapped, null, 2));
-      return unwrapped;
-    }
-    // If not wrapped, return as-is (backward compatibility)
-    console.log('[BaseServiceClient.unwrapResponse] Not wrapped, returning as-is');
-    return response as T;
-  }
-
-  /**
    * GET request
    * @param endpoint - Relative endpoint (e.g., '/api/v1/users/123' or 'api/v1/users/123')
    */
@@ -176,7 +158,7 @@ export abstract class BaseServiceClient {
         this.httpService.get<T>(url, config),
       );
 
-      return this.unwrapResponse<T>(response.data);
+      return response.data;
     } catch (error) {
       this.handleError(error as AxiosError<ErrorResponse>, 'GET', endpoint);
     }
@@ -197,7 +179,7 @@ export abstract class BaseServiceClient {
         this.httpService.post<T>(url, body, config),
       );
 
-      return this.unwrapResponse<T>(response.data);
+      return response.data;
     } catch (error) {
       this.handleError(error as AxiosError<ErrorResponse>, 'POST', endpoint);
     }
@@ -218,7 +200,7 @@ export abstract class BaseServiceClient {
         this.httpService.patch<T>(url, body, config),
       );
 
-      return this.unwrapResponse<T>(response.data);
+      return response.data;
     } catch (error) {
       this.handleError(error as AxiosError<ErrorResponse>, 'PATCH', endpoint);
     }
@@ -239,7 +221,7 @@ export abstract class BaseServiceClient {
         this.httpService.put<T>(url, body, config),
       );
 
-      return this.unwrapResponse<T>(response.data);
+      return response.data;
     } catch (error) {
       this.handleError(error as AxiosError<ErrorResponse>, 'PUT', endpoint);
     }
@@ -260,7 +242,7 @@ export abstract class BaseServiceClient {
         this.httpService.delete<T>(url, config),
       );
 
-      return this.unwrapResponse<T>(response.data);
+      return response.data;
     } catch (error) {
       this.handleError(error as AxiosError<ErrorResponse>, 'DELETE', endpoint);
     }

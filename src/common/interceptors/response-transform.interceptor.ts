@@ -32,6 +32,8 @@ export class ResponseTransformInterceptor<T>
     next: CallHandler,
   ): Observable<ApiResponse<T>> {
     const dtoClass = this.reflector.get<ClassConstructor<any>>(DTO_KEY, context.getHandler());
+    const request = context.switchToHttp().getRequest();
+    console.log(`[ResponseTransformInterceptor] Method: ${request.method} ${request.url}`);
 
     return next.handle().pipe(
       map((data) => {
