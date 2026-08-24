@@ -149,11 +149,15 @@ export abstract class BaseServiceClient {
    * This method extracts and returns just the 'data' field
    */
   protected unwrapResponse<T>(response: any): T {
+    console.log('[BaseServiceClient.unwrapResponse] Input:', JSON.stringify(response, null, 2));
     // Check if response is wrapped in ApiResponse format
     if (response && typeof response === 'object' && 'success' in response && 'data' in response) {
-      return response.data as T;
+      const unwrapped = response.data as T;
+      console.log('[BaseServiceClient.unwrapResponse] Unwrapped:', JSON.stringify(unwrapped, null, 2));
+      return unwrapped;
     }
     // If not wrapped, return as-is (backward compatibility)
+    console.log('[BaseServiceClient.unwrapResponse] Not wrapped, returning as-is');
     return response as T;
   }
 
