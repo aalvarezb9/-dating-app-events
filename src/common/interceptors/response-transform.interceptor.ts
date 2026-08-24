@@ -32,8 +32,6 @@ export class ResponseTransformInterceptor<T>
     next: CallHandler,
   ): Observable<ApiResponse<T>> {
     const dtoClass = this.reflector.get<ClassConstructor<any>>(DTO_KEY, context.getHandler());
-    const request = context.switchToHttp().getRequest();
-    console.log(`[ResponseTransformInterceptor] Method: ${request.method} ${request.url}`);
 
     return next.handle().pipe(
       map((data) => {
@@ -41,9 +39,6 @@ export class ResponseTransformInterceptor<T>
 
         // 1. Apply DTO transformation if @UseDto decorator is present
         if (dtoClass && data) {
-          console.log('[ResponseTransformInterceptor] DTO class:', dtoClass.name);
-          console.log('[ResponseTransformInterceptor] Data before transform:', JSON.stringify(data, null, 2));
-
           // Check if response is paginated (has items array)
           if (data && typeof data === 'object' && Array.isArray(data.items)) {
             // Paginated response - transform only the items array
@@ -72,8 +67,6 @@ export class ResponseTransformInterceptor<T>
               excludeExtraneousValues: true,
             });
           }
-
-          console.log('[ResponseTransformInterceptor] Data after transform:', JSON.stringify(transformedData, null, 2));
         }
 
         // 2. Wrap in standard ApiResponse format

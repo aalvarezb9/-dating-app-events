@@ -3,19 +3,23 @@ import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservice
 import { DomainEvent, DomainEventType } from '../types/events';
 import { SharedConfigService } from '../config/env.config';
 import { randomUUID } from 'crypto';
+import { lastValueFrom } from 'rxjs';
 
 /**
- * Event Publisher Service - Redis Transport (Fire-and-Forget)
+ * Event Publisher Service - Kafka Transport (Fire-and-Forget)
  *
- * Publishes domain events using NestJS Microservices with Redis transport.
- * Replaces AWS SNS/SQS in the Railway + Supabase stack.
+ * Publishes domain events using NestJS Microservices with Kafka transport.
+ * Uses partition keys to guarantee ordering of events for the same entity.
  *
  * Key Features:
  * - Fire-and-forget: Events are emitted without waiting for confirmation
- * - Redis pub/sub for event distribution
- * - Automatic connection management
- * - Retry logic for failed connections
- * - No blocking on event emission
+ * - Partition keys: Events with same key go to same partition (ordering guaranteed)
+ * - Auto-create topics (no manual registration required)
+ * - Consumer groups for horizontal scaling
+ *
+ * Partition Strategy:
+ * - Key = aggregateId (tenantId, userId, etc.)
+ * - All events for same tenant/user → same partition → ordered processing
  *
  * @example
  * ```typescript
@@ -25,6 +29,7 @@ import { randomUUID } from 'crypto';
  *     super(adapter, eventPublisher, {
  *       events: {
  *         publishOnCreate: true,
+ *         eventKeyExtractor: (entity) => entity.tenantId,
  *       },
  *     });
  *   }
@@ -39,34 +44,47 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
   private connectionPromise: Promise<void> | null = null;
 
   constructor(private config: SharedConfigService) {
-    const redisConfig = this.config.redis;
+    const kafkaConfig = this.config.kafka;
 
     this.client = ClientProxyFactory.create({
-      transport: Transport.REDIS,
+      transport: Transport.KAFKA,
       options: {
-        host: redisConfig.host,
-        port: redisConfig.port,
-        ...(redisConfig.password && { password: redisConfig.password }),
-        retryAttempts: 5,
-        retryDelay: 3000,
+        client: {
+          clientId: kafkaConfig.clientId,
+          brokers: kafkaConfig.brokers,
+          retry: {
+            retries: 5,
+            initialRetryTime: 300,
+            maxRetryTime: 30000,
+          },
+        },
+        producer: {
+          allowAutoTopicCreation: true,
+          idempotent: true,
+          maxInFlightRequests: 5,
+          retry: {
+            retries: 5,
+            initialRetryTime: 300,
+          },
+        },
       },
     });
 
     this.logger.log(
-      `EventPublisher initialized with Redis at ${redisConfig.host}:${redisConfig.port}`
+      `EventPublisher initialized with Kafka brokers: ${kafkaConfig.brokers.join(', ')} (clientId: ${kafkaConfig.clientId})`
     );
   }
 
   /**
    * OnModuleInit lifecycle hook
-   * Ensures Redis connection is established before the module is ready
+   * Ensures Kafka connection is established before the module is ready
    */
   async onModuleInit() {
     await this.connect();
   }
 
   /**
-   * Connect to Redis
+   * Connect to Kafka
    * Called automatically on module initialization
    */
   private async connect(): Promise<void> {
@@ -78,11 +96,11 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
       try {
         await this.client.connect();
         this.isConnected = true;
-        this.logger.log('EventPublisher connected to Redis successfully');
+        this.logger.log('EventPublisher connected to Kafka successfully');
       } catch (error: any) {
         this.isConnected = false;
-        this.logger.error(`Failed to connect to Redis: ${error?.message}`);
-        // Don't throw - allow service to start even if Redis is temporarily unavailable
+        this.logger.error(`Failed to connect to Kafka: ${error?.message}`);
+        // Don't throw - allow service to start even if Kafka is temporarily unavailable
       }
     })();
 
@@ -90,30 +108,48 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Publish a single domain event (Fire-and-Forget)
+   * Publish a single domain event with partition key (Fire-and-Forget)
    *
-   * This method emits the event to Redis and returns immediately without waiting for confirmation.
-   * If emission fails, it logs the error but does NOT throw to avoid blocking the caller.
+   * The partition key ensures that all events for the same entity (aggregateId)
+   * go to the same partition, guaranteeing ordered processing.
    *
    * @param event - Domain event to publish
+   * @param partitionKey - Optional partition key (defaults to aggregateId)
    */
-  async publishEvent(event: DomainEvent): Promise<void> {
+  async publishEvent(event: DomainEvent, partitionKey?: string): Promise<void> {
     try {
-      // Ensure event has required fields
       const completeEvent = {
         ...event,
         eventId: event.eventId || randomUUID(),
         timestamp: event.timestamp || new Date(),
       };
 
-      // Emit event (fire-and-forget - no .toPromise())
-      this.client.emit(event.eventType, completeEvent);
+      // Use aggregateId as default partition key (tenant, user, etc.)
+      const key = partitionKey || event.aggregateId || event.tenantId || randomUUID();
 
-      this.logger.debug(`Event emitted: ${event.eventType} (${completeEvent.eventId})`);
+      // Emit to Kafka with partition key
+      // Wrap in try-catch and use lastValueFrom for proper error handling
+      try {
+        await lastValueFrom(
+          this.client.emit(event.eventType, {
+            value: completeEvent,
+            key: key,
+          })
+        );
+
+        this.logger.debug(
+          `Event emitted to Kafka: ${event.eventType} (id: ${completeEvent.eventId}, key: ${key})`
+        );
+      } catch (emitError: any) {
+        this.logger.error(
+          `Failed to emit event to Kafka: ${emitError?.message}`,
+          emitError.stack
+        );
+        // Don't throw - fire-and-forget semantics
+      }
     } catch (error: any) {
-      // Log error but do NOT throw - fire-and-forget semantics
       this.logger.error(
-        `Failed to emit event ${event.eventType}: ${error?.message}`,
+        `Failed to prepare event ${event.eventType}: ${error?.message}`,
         error.stack
       );
     }
@@ -185,7 +221,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
       data,
       metadata: {
         correlationId: randomUUID(),
-        source: this.config.get('SERVICE_NAME') || 'backend-service',
+        source: this.config.get('SERVICE_NAMESPACE') || 'backend-service',
       },
     };
   }
@@ -204,9 +240,9 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client.close();
       this.isConnected = false;
-      this.logger.log('EventPublisher disconnected from Redis');
+      this.logger.log('EventPublisher disconnected from Kafka');
     } catch (error: any) {
-      this.logger.error(`Error closing Redis connection: ${error?.message}`);
+      this.logger.error(`Error closing Kafka connection: ${error?.message}`);
     }
   }
 }

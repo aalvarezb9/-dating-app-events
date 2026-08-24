@@ -667,10 +667,15 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       metadata: eventConfig.eventMetadata,
     };
 
-    // Publish event
+    // Extract partition key (for Kafka partitioning)
+    const partitionKey = eventConfig.eventKeyExtractor
+      ? eventConfig.eventKeyExtractor(entity, operation)
+      : event.aggregateId;
+
+    // Publish event with partition key
     try {
-      await this.eventPublisher.publishEvent(event);
-      this.logger.debug(`Event published: ${eventType} for ${this.config.entityName}`);
+      await this.eventPublisher.publishEvent(event, partitionKey);
+      this.logger.debug(`Event published: ${eventType} for ${this.config.entityName} (key: ${partitionKey})`);
     } catch (error) {
       this.logger.error(`Failed to publish event for ${this.config.entityName}:`, error);
       // Don't throw - event publishing failures shouldn't break CRUD operations

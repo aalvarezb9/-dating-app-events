@@ -114,6 +114,15 @@ export interface BaseRepositoryConfig<DbEntity = any, DomainEntity = any> {
     eventFilter?: EventFilter<DbEntity>;
 
     /**
+     * Extract partition key from entity (for Kafka)
+     * Used to ensure events for same entity go to same partition (ordering)
+     *
+     * @example
+     * eventKeyExtractor: (entity) => entity.tenantId
+     */
+    eventKeyExtractor?: (entity: DbEntity, operation: RepositoryOperation) => string;
+
+    /**
      * Custom function to extract event data from entity
      */
     eventDataExtractor?: (entity: DbEntity, operation: RepositoryOperation) => Record<string, any>;

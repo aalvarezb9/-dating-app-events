@@ -25,6 +25,11 @@ export interface AppConfig {
   baseDomain: string;
 }
 
+export interface KafkaConfig {
+  brokers: string[];
+  clientId: string;
+}
+
 /**
  * Shared Configuration Service
  *
@@ -108,6 +113,16 @@ export class SharedConfigService {
   }
 
   /**
+   * Kafka configuration
+   */
+  get kafka(): KafkaConfig {
+    return {
+      brokers: this.getArray('KAFKA_BROKERS') || ['localhost:9092'],
+      clientId: this.get('SERVICE_NAMESPACE') || 'backend-service',
+    };
+  }
+
+  /**
    * Get optional environment variable
    */
   get(key: string): string | undefined {
@@ -127,5 +142,13 @@ export class SharedConfigService {
       );
     }
     return value;
+  }
+
+  /**
+   * Helper to parse array from env (comma-separated)
+   */
+  private getArray(key: string): string[] | undefined {
+    const value = this.configService.get<string>(key);
+    return value ? value.split(',').map(v => v.trim()) : undefined;
   }
 }
