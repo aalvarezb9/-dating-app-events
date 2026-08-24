@@ -68,7 +68,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
           },
         },
       },
-    });
+    }) as unknown as ClientProxy;
 
     this.logger.log(
       `EventPublisher initialized with Kafka brokers: ${kafkaConfig.brokers.join(', ')} (clientId: ${kafkaConfig.clientId})`
