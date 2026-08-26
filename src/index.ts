@@ -41,6 +41,11 @@ export * from './auth';
 
 // Cache
 export * from './cache/redis-cache.module';
+export * from './cache/redis-lock-manager';
+
+// Redis Repositories
+export * from './repositories/redis/BaseRedisRepository';
+export * from './repositories/redis/IRedisAdapter';
 
 // Common Module (decorators, guards, interceptors, filters, DTOs, pipes)
 export * from './common';

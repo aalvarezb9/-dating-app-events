@@ -29,6 +29,12 @@ export enum DomainEventType {
   PAYMENT_SUCCESSFUL = 'PAYMENT_SUCCESSFUL',
   PAYMENT_FAILED = 'PAYMENT_FAILED',
   PAYMENT_REFUNDED = 'PAYMENT_REFUNDED',
+  PAYMENT_REQUIRED = 'PAYMENT_REQUIRED',              // NEW: Payment required for reservation
+  PAYMENT_COMPLETED = 'PAYMENT_COMPLETED',            // NEW: Payment completed successfully
+
+  // Reservation Events
+  RESERVATION_EXPIRATION_CHECK = 'RESERVATION_EXPIRATION_CHECK',   // NEW: Delayed job to check expiration
+  APPOINTMENT_RESERVATION_EXPIRED = 'APPOINTMENT_RESERVATION_EXPIRED', // NEW: Reservation expired without payment
 
   // Review Events
   REVIEW_CREATED = 'REVIEW_CREATED',
@@ -161,6 +167,56 @@ export interface PaymentSuccessfulEvent extends DomainEvent {
   };
 }
 
+export interface PaymentRequiredEvent extends DomainEvent {
+  eventType: DomainEventType.PAYMENT_REQUIRED;
+  data: {
+    appointmentId: string;
+    requestId: string;
+    customerId: string | null;
+    customerEmail: string;
+    customerName: string;
+    businessTenantId: string;
+    amount: number;
+    currency: string;
+    reservationExpiresAt: Date;
+    paymentIntentId?: string;
+  };
+}
+
+export interface PaymentCompletedEvent extends DomainEvent {
+  eventType: DomainEventType.PAYMENT_COMPLETED;
+  data: {
+    appointmentId: string;
+    paymentIntentId: string;
+    amount: number;
+    currency: string;
+    paymentMethod: string;
+    transactionId: string;
+  };
+}
+
+export interface ReservationExpirationCheckEvent extends DomainEvent {
+  eventType: DomainEventType.RESERVATION_EXPIRATION_CHECK;
+  data: {
+    appointmentId: string;
+    businessTenantId: string;
+    teamMemberId: string | null;
+    scheduledAt: Date;
+    expiresAt: Date;
+  };
+}
+
+export interface AppointmentReservationExpiredEvent extends DomainEvent {
+  eventType: DomainEventType.APPOINTMENT_RESERVATION_EXPIRED;
+  data: {
+    appointmentId: string;
+    customerId: string | null;
+    businessId: string;
+    scheduledAt: Date;
+    reason: string;
+  };
+}
+
 export type DomainEventUnion =
   | UserRegisteredEvent
   | BusinessRegisteredEvent
@@ -168,4 +224,8 @@ export type DomainEventUnion =
   | BusinessRequestRejectedEvent
   | AppointmentCreatedEvent
   | AppointmentCancelledEvent
-  | PaymentSuccessfulEvent;
+  | PaymentSuccessfulEvent
+  | PaymentRequiredEvent
+  | PaymentCompletedEvent
+  | ReservationExpirationCheckEvent
+  | AppointmentReservationExpiredEvent;
