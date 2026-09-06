@@ -87,12 +87,14 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   withTransaction(manager: EntityManager): this {
     const clone = Object.create(this);
     clone.transactionManager = manager;
+    for (const key of Object.keys(this)) {
+      const value = (this as any)[key];
+      if (value && typeof value === 'object' && value.target && value.manager) {
+        const entityTarget = value.target;
+        clone[key] = manager.getRepository(entityTarget);
+      }
+    }
     return clone;
-  }
-
-  protected getRepository<T extends ObjectLiteral>(entity: new () => T): Repository<T> {
-    if (this.transactionManager) return this.transactionManager.getRepository(entity);
-    return (this.adapter as any).repository as Repository<T>;
   }
 
   /**
