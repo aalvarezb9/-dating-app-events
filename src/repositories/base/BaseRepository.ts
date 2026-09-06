@@ -7,7 +7,7 @@ import { ExecutionContext } from '../../common/context/execution-context.service
 import { randomUUID } from 'crypto';
 import { PaginationQuery, PaginatedResult, createPaginatedResult } from '../../common/dto/pagination.dto';
 import { DynamicFilters, FilterOperator } from '../../common/dto/filterable-query.dto';
-import { Between, MoreThanOrEqual, LessThanOrEqual, In, Not, Like, ILike } from 'typeorm';
+import { Between, MoreThanOrEqual, LessThanOrEqual, In, Not, Like, ILike, EntityManager, Repository, ObjectLiteral } from 'typeorm';
 
 /**
  * Base repository class with DDD support and automatic tenant isolation
@@ -69,6 +69,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   protected readonly logger = new Logger(this.constructor.name);
   protected pendingEvents: DomainEvent[] = [];
   protected tenantId: string | null = null;
+  protected transactionManager?: EntityManager;
 
   constructor(
     protected readonly adapter: IDatabaseAdapter<DbEntity>,
@@ -81,6 +82,17 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
     this.config.idField = this.config.idField || 'id';
     this.config.tenantIdField = this.config.tenantIdField || 'tenantId';
     this.config.userIdField = this.config.userIdField || 'userId';
+  }
+
+  withTransaction(manager: EntityManager): this {
+    const clone = Object.create(this);
+    clone.transactionManager = manager;
+    return clone;
+  }
+
+  protected getRepository<T extends ObjectLiteral>(entity: new () => T): Repository<T> {
+    if (this.transactionManager) return this.transactionManager.getRepository(entity);
+    return (this.adapter as any).repository as Repository<T>;
   }
 
   /**
