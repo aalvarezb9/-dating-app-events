@@ -1,3 +1,4 @@
+import { isValidServiceNamespace } from '../database/entities/service-naming.strategy';
 import { Injectable } from '@nestjs/common';
 import { ConfigService as NestConfigService } from '@nestjs/config';
 
@@ -118,8 +119,31 @@ export class SharedConfigService {
   get kafka(): KafkaConfig {
     return {
       brokers: this.getArray('KAFKA_BROKERS') || ['localhost:9092'],
-      clientId: this.get('SERVICE_NAMESPACE') || 'backend-service',
+      clientId: this.serviceName,
     };
+  }
+
+  /**
+   * Short abbreviation of the service (e.g. "bo"): prefix of every table of the service
+   * (ServiceNamingStrategy) and actor of system writes ("system:bo"). Validated on access.
+   */
+  get serviceNamespace(): string {
+    const namespace = this.getRequired('SERVICE_NAMESPACE');
+    if (!isValidServiceNamespace(namespace)) {
+      throw new Error(
+        `Invalid SERVICE_NAMESPACE "${namespace}": use a short lowercase abbreviation (2-6 chars, e.g. "bo").`,
+      );
+    }
+    return namespace;
+  }
+
+  /**
+   * Full name of the service (e.g. "backend-dating-business-owner"): Kafka clientId and the
+   * "source" of published events.
+   * Transitional: services that have not defined SERVICE_NAME yet keep using SERVICE_NAMESPACE.
+   */
+  get serviceName(): string {
+    return this.get('SERVICE_NAME') || this.get('SERVICE_NAMESPACE') || 'backend-service';
   }
 
   /**

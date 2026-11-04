@@ -4,6 +4,7 @@ import { BaseRepositoryConfig, RepositoryOperation } from './BaseRepositoryConfi
 import { DomainEvent, DomainEventType } from '../../types/events';
 import { EventPublisher } from '../../services/event-publisher.service';
 import { ExecutionContext } from '../../common/context/execution-context.service';
+import { EntityScope, getEntityScope } from '../../database/entities/entity-scope';
 import { randomUUID } from 'crypto';
 import { PaginationQuery, PaginatedResult, createPaginatedResult } from '../../common/dto/pagination.dto';
 import { DynamicFilters, FilterOperator } from '../../common/dto/filterable-query.dto';
@@ -99,6 +100,11 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   protected pendingEvents: DomainEvent[] = [];
   protected tenantId: string | null = null;
   protected transactionManager?: EntityManager;
+  /**
+   * Declared by the entity's inheritance: 'tenant' (TenantEntity) filters by tenant,
+   * 'global' (GlobalEntity) never does. undefined = legacy entity, configured by tenantIdField.
+   */
+  protected readonly entityScope?: EntityScope;
 
   constructor(
     protected readonly adapter: IDatabaseAdapter<DbEntity>,
@@ -111,6 +117,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
     this.config.idField = this.config.idField || 'id';
     this.config.tenantIdField = this.config.tenantIdField || 'tenantId';
     this.config.userIdField = this.config.userIdField || 'userId';
+    this.entityScope = getEntityScope((adapter as any).repository?.target);
   }
 
   withTransaction(manager: EntityManager): this {
@@ -172,6 +179,11 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
    * @param criteria - Search criteria
    */
   private addTenantFilter(criteria: FindCriteria = {}): FindCriteria {
+    // Tables without tenant (GlobalEntity) are never filtered
+    if (this.entityScope === 'global') {
+      return criteria;
+    }
+
     // Cross-tenant endpoints/classes bypass tenant filtering
     if (ExecutionContext.isCrossTenant()) {
       return criteria;
@@ -252,8 +264,8 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         ...dbEntity
       } as Partial<DbEntity>;
 
-      // Only set tenant ID for non-cross-tenant and non-public endpoints
-      if (!ExecutionContext.isCrossTenant() && !ExecutionContext.isPublic()) {
+      // Only set tenant ID for tenant tables on non-cross-tenant and non-public endpoints
+      if (this.entityScope !== 'global' && !ExecutionContext.isCrossTenant() && !ExecutionContext.isPublic()) {
         // Private endpoints MUST have a tenant ID
         const tenantId = this.getTenantId(true); // Will throw error if missing
         entityWithTenant = {...entityWithTenant, [tenantField]: tenantId};
@@ -276,7 +288,7 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   async create(entity: Partial<DbEntity>): Promise<DomainEntity> {
     try {
       const tenantField = this.config.tenantIdField!;
-      const tenantId = this.getTenantId(false);
+      const tenantId = this.entityScope === 'global' ? null : this.getTenantId(false);
 
       const entityWithTenant = tenantId
         ? { ...entity, [tenantField]: tenantId }

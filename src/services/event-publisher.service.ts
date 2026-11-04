@@ -221,7 +221,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
       data,
       metadata: {
         correlationId: randomUUID(),
-        source: this.config.get('SERVICE_NAMESPACE') || 'backend-service',
+        source: this.config.serviceName,
       },
     };
   }

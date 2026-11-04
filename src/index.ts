@@ -56,6 +56,7 @@ export * from './http-client';
 // Database Utilities
 export * from './database/transaction-manager';
 export * from './database/advisory-lock-manager';
+export * from './database/entities';
 
 // Encryption
 export * from './encryption/encryption.service';

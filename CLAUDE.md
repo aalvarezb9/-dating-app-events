@@ -39,6 +39,7 @@ npm test          # jest
 |---|---|---|
 | Leer una variable de entorno | `SharedConfigService` | `config/env.config.ts` |
 | Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
+| Declarar una tabla (columnas de auditoría, tenant, prefijo del servicio) | `@Entity` + `TenantEntity` / `GlobalEntity` | `database/entities/` |
 | Contar / sumar / agrupar (estadísticas) | `repo.aggregate(...)` | `repositories/base/BaseRepository.ts` |
 | Listado paginado con filtros dinámicos | `repo.findManyWithPagination(...)` + `PaginationDto`/`FilterableQueryDto` | `BaseRepository.ts`, `common/dto/` |
 | El tenant / usuario actual dentro de un service | `ExecutionContext` (o `@CurrentTenant()`/`@CurrentUser()` en el controller) | `common/context/`, `common/decorators/` |
@@ -143,6 +144,21 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | `constants/currencies.ts` | `VALID_CURRENCIES` (`HNL`, `USD`), `isValidCurrency` | Validar monedas |
 | `utils/redact.ts` | `redactSensitive`, `REDACTED`: enmascara contraseñas, tokens, cuentas, tarjetas… | Cualquier log propio de un payload |
 
+### Entidades base y nombres de tabla (`database/entities/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `entity-scope.ts` | Marca estática heredada (`ENTITY_SCOPE`): `'tenant'` o `'global'`; `getEntityScope`, `isMultiTenantEntity` | Lo leen `@Entity`, `BaseRepository` y el subscriber; rara vez directo |
+| `base-entities.ts` | `AuditedEntity` (`created_at`, `modified_at`, `created_by`, `modified_by`), `TenantEntity` (+ `tenant_id` obligatorio, indexado e inmutable; es la **clave de partición** de la tabla) y `GlobalEntity` (sin tenant) | **Toda entidad nueva hereda de `TenantEntity` (casi siempre) o de `GlobalEntity`** (infraestructura como el outbox o catálogos de plataforma) |
+| `entity.decorator.ts` | `@Entity(name)` (sustituye al de TypeORM; **falla al arrancar** si la clase no hereda de ninguna de las dos bases) y `@TenantIndex([...cols])` (índice que antepone `tenant_id`) | En cada entidad: `@Entity('services') export class Service extends TenantEntity` |
+| `audit.subscriber.ts` | `AuditModule` + `AuditSubscriber`: al insertar rellena `created_by`/`modified_by` y `tenant_id` (del `ExecutionContext`); al actualizar, `modified_by`. Importar `AuditModule` en el `AppModule` después de `TypeOrmModule` | Siempre que el servicio use las bases |
+| `audit-actor.ts` | `AuditActor` y `auditFields()`: usuario actual o `system:<SERVICE_NAMESPACE>` en consumers, crons y colas | **En escrituras con query builder** (p. ej. compare-and-set), que no disparan el subscriber: `.set({ ...cambios, ...auditFields() })` |
+| `service-naming.strategy.ts` | `ServiceNamingStrategy(namespace)`: prefija **cada tabla** con `SERVICE_NAMESPACE` (`bo_services`) y pone `snake_case` a columnas. `isValidServiceNamespace` | En `TypeOrmModule.forRootAsync`: `namingStrategy: new ServiceNamingStrategy(config.serviceNamespace)` |
+
+`BaseRepository` deduce el aislamiento de la herencia: entidad `TenantEntity` → filtra por `tenantId` e inyecta el tenant al crear; `GlobalEntity` → nunca filtra. Las entidades antiguas (que no heredan de las bases) siguen funcionando con `tenantIdField`.
+
+**`SERVICE_NAMESPACE`** es ahora una **abreviatura** (2–6 minúsculas: `bo`, `sch`, `usr`, `auth`, `adm`, `ntf`; `SharedConfigService.serviceNamespace` la valida) y es el prefijo de las tablas y el actor de las escrituras del sistema. El nombre largo del servicio va en **`SERVICE_NAME`** (`SharedConfigService.serviceName`), usado como `clientId` de Kafka y `source` de los eventos. Transitorio: mientras un servicio no defina `SERVICE_NAME`, `serviceName` cae a `SERVICE_NAMESPACE`.
+
 ### Otros módulos
 
 | Archivo | Qué hace | Úsalo cuando |
@@ -169,7 +185,7 @@ Para añadir un proveedor: crear la estrategia en `auth/strategies/` o `storage/
 - Los servicios acceden a env **solo** vía `SharedConfigService`; nunca `process.env`.
 - Variables requeridas lanzan error si faltan (`getRequired`), sin valores por defecto. Config disponible: `database`, `supabase`, `redis`, `app`, `jwtSecret`, `kafka`, y `get(key)` para opcionales.
 - ⚠️ Excepción actual: `kafka.brokers` cae a `['localhost:9092']` y `clientId` a `SERVICE_NAMESPACE || 'backend-service'`. No replicar este patrón.
-- Variables que usa la librería: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_STORAGE_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD?`, `PORT`, `NODE_ENV`, `BASE_DOMAIN`, `JWT_SECRET`, `KAFKA_BROKERS`, `SERVICE_NAMESPACE`, `AUTH_PROVIDER?`, `STORAGE_PROVIDER?`, `ENCRYPTION_KEY`.
+- Variables que usa la librería: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_STORAGE_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD?`, `PORT`, `NODE_ENV`, `BASE_DOMAIN`, `JWT_SECRET`, `KAFKA_BROKERS`, `SERVICE_NAMESPACE` (abreviatura, prefijo de tablas), `SERVICE_NAME` (nombre completo), `AUTH_PROVIDER?`, `STORAGE_PROVIDER?`, `ENCRYPTION_KEY`.
 
 ### Eventos (Kafka)
 - `EventPublisher.publishEvent(event, partitionKey?)`: fire-and-forget con productor idempotente y auto-creación de topics. La clave de partición (default `aggregateId`) garantiza orden por entidad.
