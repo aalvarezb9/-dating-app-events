@@ -457,10 +457,10 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       }
 
       await this.adapter.softDelete(id);
-      const updated = await this.adapter.findById(id);
-      if (updated) {
-        await this.handleEventEmission(updated, 'soft-delete');
-      }
+      // Reading the row again would not find it (adapters hide soft-deleted rows), so the event
+      // is built from the row as it was, marked as deleted now.
+      const deleted = { ...this.toDb(existing), [this.config.softDeleteField!]: new Date() } as DbEntity;
+      await this.handleEventEmission(deleted, 'soft-delete');
     } catch (error) {
       this.logger.error(`Error soft deleting ${this.config.entityName} with id ${id}:`, error);
       throw error;
