@@ -8,7 +8,7 @@ import { EntityScope, getEntityScope } from '../../database/entities/entity-scop
 import { randomUUID } from 'crypto';
 import { PaginationQuery, PaginatedResult, createPaginatedResult } from '../../common/dto/pagination.dto';
 import { DynamicFilters, FilterOperator } from '../../common/dto/filterable-query.dto';
-import { Between, MoreThan, MoreThanOrEqual, LessThan, LessThanOrEqual, In, Not, Like, ILike, FindOperator, EntityManager, Repository, ObjectLiteral } from 'typeorm';
+import { Between, IsNull, MoreThan, MoreThanOrEqual, LessThan, LessThanOrEqual, In, Not, Like, ILike, FindOperator, EntityManager, Repository, ObjectLiteral } from 'typeorm';
 
 /** SQL aggregate functions supported by BaseRepository.aggregate() */
 export type AggregateFunction = 'count' | 'sum' | 'avg' | 'min' | 'max';
@@ -741,7 +741,12 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         queryBuilder.addSelect(`e.${groupBy}`, GROUP_ALIAS).groupBy(`e.${groupBy}`);
       }
       if (Object.keys(conditions).length > 0) {
-        queryBuilder.where(conditions);
+        // The soft delete filter is "field: null" ("never deleted"). find() turns it into IS NULL, but
+        // QueryBuilder.where() would compare "= NULL" (never true), so it must be explicit here.
+        const explicit = Object.fromEntries(
+          Object.entries(conditions).map(([field, value]) => [field, value === null ? IsNull() : value]),
+        );
+        queryBuilder.where(explicit);
       }
 
       const rows: Array<Record<string, any>> = await queryBuilder.getRawMany();

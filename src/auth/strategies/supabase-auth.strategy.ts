@@ -60,6 +60,13 @@ export class SupabaseAuthStrategy extends AuthService {
     this.supabase = createClient(
       supabaseConfig.url,
       supabaseConfig.serviceRoleKey, // Use service role for admin operations
+      {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: false,
+          detectSessionInUrl: false,
+        },
+      },
     );
 
     this.logger.log(`SupabaseAuthStrategy initialized`);
