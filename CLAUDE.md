@@ -2,7 +2,7 @@
 
 Librería compartida de los microservicios NestJS de la app de citas. **No es un servicio**: se publica vía GitHub y se instala como dependencia (`"@dating-app/events": "github:aalvarezb9/-dating-app-events#main"`).
 
-> Punto de entrada del workspace: `../../backend-all-services/CLAUDE.md`. Consumidor principal y referencia de uso: `../../backend-dating-business-owner/CLAUDE.md`.
+> **Los agentes y desarrolladores deben conocer esta librería antes de escribir código en cualquier servicio**: el catálogo "qué hace cada archivo y cuándo usarlo" está más abajo. Punto de entrada del workspace: `../../backend-all-services/CLAUDE.md`. Consumidor principal y referencia de uso: `../../backend-dating-business-owner/CLAUDE.md`.
 
 ## Regla de oro
 
@@ -29,32 +29,129 @@ npm run dev       # tsc --watch
 npm test          # jest
 ```
 
-## Mapa del código (`src/`)
+## Catálogo de la librería: qué hace cada archivo y cuándo usarlo
 
-| Carpeta / archivo | Contenido |
-|---|---|
-| `index.ts` | **Único punto de exportación público.** Todo lo nuevo se exporta aquí (directa o vía `index.ts` de carpeta). |
-| `config/` | `SharedConfigService` (lee env con validación), `SharedConfigModule` |
-| `auth/` | `AuthService` (contrato abstracto), `SupabaseAuthStrategy`, `SupabaseJwtStrategy`, `AuthModule` (global, factory por `AUTH_PROVIDER`) |
-| `storage/` | `FileStorageService` (contrato), `SupabaseStorageStrategy`, `StorageModule` (global, factory por `STORAGE_PROVIDER`) |
-| `services/event-publisher.service.ts` | `EventPublisher` — transporte **Kafka** (`publishEvent`) |
-| `events.module.ts` | `EventsModule` (global) que provee `EventPublisher` |
-| `types/events.ts` | `DomainEventType` (enum), `DomainEvent` y eventos tipados |
-| `repositories/base/` | `BaseRepository`, `BaseRepositoryConfig`, `IDatabaseAdapter` |
-| `repositories/adapters/` | `PostgresAdapter` (exportado); `DynamoDBAdapter` existe pero **no** se exporta (requiere AWS SDK opcional) |
-| `repositories/redis/` | `BaseRedisRepository`, `IRedisAdapter` |
-| `decorators/emitable.decorator.ts` | Decorador para emisión de eventos |
-| `common/decorators/` | `@Public`, `@Roles`, `@CrossTenant`, `@IncludeDeleted`, `@CurrentUser`, `@CurrentTenant`, `@UseDto`, `@ApiStandardResponse` |
-| `common/guards/` | `JwtAuthGuard`, `RolesGuard`, `TenantGuard`, `ApiKeyGuard` |
-| `common/interceptors/` | `ExecutionContextInterceptor`, `LoggingInterceptor`, `SanitizeInterceptor`, `ResponseTransformInterceptor` (+ `tenant`/`transform` heredados) |
-| `common/filters/` | `AllExceptionsFilter`, `HttpExceptionFilter` |
-| `common/context/` | `ExecutionContext` (AsyncLocalStorage: tenantId, userId, flags) |
-| `common/dto/`, `interfaces/` | `PaginationDto`, `FilterableQueryDto`, `DateRangeDto`, `ApiResponse<T>` |
-| `cache/` | `RedisCacheModule` (cache-manager), `RedisLockManager` (locks TTL) |
-| `database/` | `TransactionManager`, `AdvisoryLockManager` (locks `pg_advisory_xact_lock`) |
-| `encryption/` | `EncryptionService` (AES-256-GCM, requiere `ENCRYPTION_KEY` ≥ 32 chars), `EncryptionModule` |
-| `http-client/` | `BaseServiceClient` + `HttpClientModule` — comunicación HTTP inter-servicio con API key |
-| `common/types/auth.types.ts` | `UserRole` (`super_admin`, `business_owner`, `business_staff`, `customer`, `guest`) |
+> **Antes de escribir código en un servicio, busca aquí si ya existe.** Todo se importa desde `@dating-app/events` (único punto público: `src/index.ts`). Rutas relativas a `src/`.
+
+### Árbol de decisión rápido
+
+| Necesito… | Usar | Archivo |
+|---|---|---|
+| Leer una variable de entorno | `SharedConfigService` | `config/env.config.ts` |
+| Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
+| Contar / sumar / agrupar (estadísticas) | `repo.aggregate(...)` | `repositories/base/BaseRepository.ts` |
+| Listado paginado con filtros dinámicos | `repo.findManyWithPagination(...)` + `PaginationDto`/`FilterableQueryDto` | `BaseRepository.ts`, `common/dto/` |
+| El tenant / usuario actual dentro de un service | `ExecutionContext` (o `@CurrentTenant()`/`@CurrentUser()` en el controller) | `common/context/`, `common/decorators/` |
+| Trabajar con un tenant fuera de HTTP (consumer, cron, cola) | `ExecutionContext.run({ tenantId }, cb)` | `common/context/execution-context.service.ts` |
+| Publicar un evento a otros servicios | `EventPublisher.publishEvent` | `services/event-publisher.service.ts` |
+| Declarar un tipo de evento nuevo | Añadir a `DomainEventType` | `types/events.ts` |
+| Evitar que dos peticiones reserven lo mismo (PostgreSQL) | `AdvisoryLockManager` | `database/advisory-lock-manager.ts` |
+| Retener un recurso con caducidad (reserva temporal) | `RedisLockManager` | `cache/redis-lock-manager.ts` |
+| Varias escrituras atómicas (con limpieza si falla) | `TransactionManager` | `database/transaction-manager.ts` |
+| Subir/borrar/firmar archivos | `FileStorageService` | `storage/` |
+| Registrar, loguear o gestionar usuarios | `AuthService` (solo el servicio de auth debe dar altas) | `auth/` |
+| Llamar a otro microservicio por HTTP | Extender `BaseServiceClient` | `http-client/base-service-client.ts` |
+| Cifrar un dato sensible en BD | `EncryptionService` | `encryption/encryption.service.ts` |
+| Que un log no muestre contraseñas/cuentas | `redactSensitive` | `common/utils/redact.ts` |
+| Proteger un endpoint | `@Roles`, `@Public`, `@CrossTenant` + guards | `common/decorators/`, `common/guards/` |
+| Validar monedas | `VALID_CURRENCIES`, `isValidCurrency` | `common/constants/currencies.ts` |
+
+Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en esta librería; si es de un solo servicio, va en el servicio.
+
+### Configuración (`config/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `env.config.ts` | `SharedConfigService`: lee y **valida** las variables de entorno y las expone tipadas (`database`, `supabase`, `redis`, `app`, `jwtSecret`, `kafka`, `get(key)` para opcionales). Falla al arrancar si falta una requerida | Siempre que un servicio necesite configuración. Nunca `process.env` |
+| `shared-config.module.ts` | `SharedConfigModule` (global): provee `SharedConfigService` | Importarlo una vez en el `AppModule` |
+
+### Autenticación (`auth/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `auth-service.interface.ts` | Contrato abstracto `AuthService` (`signUp`, `signIn`, `updateUserMetadata`, `refreshToken`, `signOut`, `getUserById`, `sendPasswordResetEmail`, `verifyUserEmail`, `deleteUser`) y tipos genéricos `AuthUser`, `AuthSession`, `SignUpResult`… | Para inyectar autenticación sin depender del proveedor. Solo el **auth service** debe crear usuarios; el resto usa `AuthServiceClient` por HTTP |
+| `strategies/supabase-auth.strategy.ts` | Implementación del contrato sobre Supabase Auth (GoTrue); mapea tipos de Supabase a los genéricos | No se importa directo: la elige `AuthModule` según `AUTH_PROVIDER` |
+| `strategies/supabase-jwt.strategy.ts` | Estrategia Passport `supabase-jwt`: valida el JWT, construye el usuario (`tenantId`, `tenantType`, rol…) y comprueba que sigue existiendo en Supabase (caché de 60 s) | Automática al usar `JwtAuthGuard` |
+| `auth.module.ts` | `AuthModule` (global): factory que provee `AuthService` y la estrategia JWT | Importarlo en servicios que autentican o validan JWT |
+| `supabase-auth.service.ts`, `supabase-jwt.strategy.ts` (raíz de `auth/`) | **Duplicados históricos** de los anteriores; no se usan | No usar; ver "Deuda conocida" |
+
+### Almacenamiento (`storage/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `file-storage.interface.ts` | Contrato `FileStorageService`: `uploadFile`, `deleteFile(s)`, `getPublicUrl`, `getSignedUrl`, `listFiles` | Para guardar/servir archivos. Buckets públicos → `getPublicUrl`; privados (p. ej. `payment-proofs`) → `getSignedUrl` |
+| `strategies/supabase-storage.strategy.ts` | Implementación sobre Supabase Storage (MinIO en local); también `extractPathFromUrl` | La elige `StorageModule` según `STORAGE_PROVIDER` |
+| `storage.module.ts` | `StorageModule` (global) con factory del proveedor | Importarlo en servicios que manejan archivos |
+
+### Eventos (`services/`, `types/`, `decorators/`, `events.module.ts`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `types/events.ts` | Enum `DomainEventType` (usuarios, negocios, citas, pagos —incluye `PAYMENT_PROOF_UPLOADED/REJECTED`—, reseñas, suscripciones), interfaz base `DomainEvent` y eventos tipados | Para nombrar cualquier evento entre servicios. Eventos nuevos se declaran aquí |
+| `services/event-publisher.service.ts` | `EventPublisher`: productor Kafka idempotente; `publishEvent(event, partitionKey?)` (fire-and-forget), `publishEventsBatch`, `publishToTopic`, `publishEventAndQueue`, `isClientConnected`. El topic es el `eventType` | Para emitir un hecho de dominio. La clave de partición (tenantId / id del agregado) preserva el orden |
+| `events.module.ts` | `EventsModule` (global): provee `EventPublisher` | Importarlo en servicios que publican |
+| `decorators/emitable.decorator.ts` | `@Emitable`/`@EventField`: marca entidades y campos que viajan en un evento | Mecanismo antiguo; para eventos de repositorio prefiere `config.events` de `BaseRepository` |
+
+### Repositorios (`repositories/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `base/BaseRepository.ts` | Repositorio genérico: CRUD, `findMany`, `findManyWithPagination`, `aggregate`, `update`, `delete`, `softDelete`, `restore`, `exists`, `count`, `withTransaction`. **Filtra por tenant y soft delete automáticamente** (a menos que el endpoint sea `@CrossTenant`/`@Public`) y publica eventos de repositorio según `config.events` | Es la base de **todo** repositorio de negocio. Estadísticas → `aggregate`; listados → `findManyWithPagination` (nunca cargar todo y filtrar en memoria) |
+| `base/BaseRepositoryConfig.ts` | Configuración del repositorio: `tenantIdField`, `softDeleteField`, mapeos entidad↔dominio, `events` (`publishOnCreate/Update…`, `eventTypeOn*`, `eventKeyExtractor`, `eventDataExtractor`) | Al declarar un repositorio nuevo |
+| `base/IDatabaseAdapter.ts` | Contrato de adaptador de BD (`FindCriteria`, `FindOptions`, `DatabaseType`) | Solo si añades un motor de BD |
+| `adapters/PostgresAdapter.ts` | Adaptador TypeORM/PostgreSQL | Se pasa a `BaseRepository` en el constructor de cada repositorio |
+| `adapters/DynamoDBAdapter.ts` | Adaptador DynamoDB (no exportado; requiere AWS SDK opcional) | No usar |
+| `event-emitting.repository.ts` | `EventEmittingRepository`: envoltorio antiguo de repositorio TypeORM que acumula eventos pendientes | Legado; preferir `BaseRepository` |
+| `redis/BaseRedisRepository.ts`, `redis/IRedisAdapter.ts` | Repositorio base y contrato para datos en Redis (`get/set/delete/exists/setWithExpiration/getTTL`) | Estado efímero con TTL guardado como entidad (p. ej. reservas de slot) |
+
+### Concurrencia y transacciones (`database/`, `cache/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `database/advisory-lock-manager.ts` | `AdvisoryLockManager.runWithLock/runWithLocks(dataSource, claves, callback)`: advisory locks de PostgreSQL ligados a una transacción; entrega el `EntityManager` a usar | "Comprobar + insertar" que no debe ejecutarse a la vez (citas, reseñas, subdominios). **Las tablas de citas exigen el lock compartido** (ver CLAUDE.md del orquestador). Dentro del callback usa el `manager` entregado |
+| `database/transaction-manager.ts` | `TransactionManager.run/runSimple`: transacción con callbacks de limpieza (`registerCleanup`) si hace rollback | Varias escrituras que deben ser atómicas o con efectos a deshacer |
+| `cache/redis-lock-manager.ts` | `RedisLockManager`: `acquireLock/releaseLock/isLocked/getLockValue/extendLock` con TTL | Retener un recurso un tiempo (slot reservado a la espera de pago); no sustituye al advisory lock |
+| `cache/redis-cache.module.ts` | `RedisCacheModule.forRoot()`: cache-manager sobre Redis | Cache compartida y base de `RedisLockManager` |
+
+### HTTP: contexto, decoradores, guards, interceptors, filtros (`common/`)
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `context/execution-context.service.ts` | `ExecutionContext` (AsyncLocalStorage): `tenantId`, `userId`, `userEmail`, `userRoles`, `requestId`, flags `isPublic/isCrossTenant/includeDeleted`; `run(ctx, cb)`, `getTenantId()`… | Leer el tenant en cualquier capa; **abrirlo a mano en consumers, crons y colas** (`run({ tenantId }, cb)`). Nunca `repo.setTenantId` |
+| `interceptors/execution-context.interceptor.ts` | Puebla el `ExecutionContext` por petición HTTP desde el JWT y los metadatos de los decoradores | Registrarlo globalmente en `main.ts` antes de los guards |
+| `interceptors/sanitize.interceptor.ts` | Elimina HTML/XSS de `body`, `query` y `params` (recursivo) | Registro global en todo servicio con entrada de usuario |
+| `interceptors/logging.interceptor.ts` | Log de petición/respuesta con el cuerpo **redactado** y truncado | Registro global |
+| `interceptors/response-transform.interceptor.ts` | Envuelve la respuesta en `{ success, data, timestamp }` y aplica `@UseDto` | Registro global |
+| `interceptors/tenant.interceptor.ts`, `transform.interceptor.ts` | Versiones heredadas | No usar en código nuevo |
+| `guards/jwt-auth.guard.ts` | Exige JWT válido (`supabase-jwt`), salvo rutas `@Public()` | Guard global de los servicios con usuarios |
+| `guards/roles.guard.ts` | Comprueba el rol del JWT contra `@Roles(...)` | Guard global junto al anterior |
+| `guards/tenant.guard.ts` | Exige `tenantId` y tipo de tenant "negocio" | Rutas solo para negocios |
+| `guards/api-key.guard.ts` | Valida `x-api-key` + `x-service-name` (llamadas entre servicios) | Endpoints internos consumidos por otros microservicios, no por la UI |
+| `decorators/roles.decorator.ts` | `@Roles(UserRole…)` | Todo endpoint privado |
+| `decorators/public.decorator.ts` | `@Public()`: sin JWT y sin filtro de tenant | Endpoints públicos (health, registro). **Nunca en business-owner** salvo `/health` |
+| `decorators/cross-tenant.decorator.ts` | `@CrossTenant()`: desactiva el filtro de tenant | Solo cuando la unicidad o consulta es global (subdominios) y justificado |
+| `decorators/include-deleted.decorator.ts` | `@IncludeDeleted()`: incluye filas con soft delete | Papelera / auditoría |
+| `decorators/current-user.decorator.ts`, `current-tenant.decorator.ts` | Inyectan `ICurrentUser` / `tenantId` del request en el controller | En vez de leer `req.user` |
+| `decorators/use-dto.decorator.ts` | `@UseDto(Dto)`: el interceptor transforma la respuesta a ese DTO | Todo endpoint con respuesta tipada |
+| `decorators/api-standard-response.decorator.ts` | `@ApiStandardResponse(Dto, { status, isArray?, isPaginated? })`: documenta la respuesta en Swagger | Todo endpoint (en vez de `@ApiResponse`) |
+| `dto/pagination.dto.ts` | `PaginationDto` (`page`, `limit`, orden), `PaginatedResult<T>`, `createPaginatedResult` | Query y resultado de listados paginados |
+| `dto/filterable-query.dto.ts` | `FilterableQueryDto`, `DynamicFilters`, operadores (`$gte`, `$in`, `$like`…) | Filtros dinámicos traducidos por `BaseRepository` |
+| `dto/date-range.dto.ts`, `dto/base-response.dto.ts` | Rango de fechas validado; respuesta base `success/error` | Filtros por fechas; respuestas simples |
+| `interfaces/api-response.interface.ts` | `ApiResponse<T>`, `PaginatedResponse<T>` | Tipar respuestas |
+| `filters/all-exceptions.filter.ts`, `http-exception.filter.ts` | Convierten excepciones en respuestas JSON uniformes | Filtro global en `main.ts` |
+| `types/auth.types.ts` | `UserRole` (`super_admin`, `business_owner`, `business_staff`, `customer`, `guest`) y `TenantType` | Cualquier chequeo de rol/tipo |
+| `constants/currencies.ts` | `VALID_CURRENCIES` (`HNL`, `USD`), `isValidCurrency` | Validar monedas |
+| `utils/redact.ts` | `redactSensitive`, `REDACTED`: enmascara contraseñas, tokens, cuentas, tarjetas… | Cualquier log propio de un payload |
+
+### Otros módulos
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `encryption/encryption.service.ts` | `EncryptionService.encrypt/decrypt`: AES-256-GCM, clave derivada con scrypt y sal aleatoria (`v2:`), lee el formato antiguo | Datos sensibles en BD (cuentas bancarias). Requiere `ENCRYPTION_KEY` ≥ 32 caracteres |
+| `encryption/encryption.module.ts` | `EncryptionModule` | Importarlo donde se cifra |
+| `http-client/base-service-client.ts` | `BaseServiceClient`: cliente Axios con API key, timeout y manejo de errores (`get/post/patch/put/delete`) | Una clase por servicio remoto (`AuthServiceClient`) |
+| `http-client/http-client.module.ts` | `HttpClientModule` | Importarlo donde hay clientes HTTP |
+| `index.ts` | Reexporta lo público | Todo export nuevo pasa por aquí |
 
 Fuera de `src/`: `examples/` (ejemplos de uso, p. ej. `UserRepository.example.ts`) y `dist/` (build, ignorado por git).
 
@@ -79,7 +176,7 @@ Para añadir un proveedor: crear la estrategia en `auth/strategies/` o `storage/
 - La conexión a Kafka es tolerante: si falla al iniciar, el servicio arranca igual y registra el error.
 - El nombre del topic es el `eventType`. Nuevos eventos → añadir al enum `DomainEventType` en `types/events.ts` (+ interfaz tipada si lleva datos estructurados) y exportar.
 - `BaseRepository` publica eventos automáticamente según `config.events` (ver abajo).
-- ⚠️ **Pendiente de publicar**: `PAYMENT_PROOF_UPLOADED` y `PAYMENT_PROOF_REJECTED` (comprobantes de transferencia bancaria, consumidos/emitidos por `business-owner`) ya están en `types/events.ts` de este árbol de trabajo, pero no se han subido a GitHub. Hasta republicar y reinstalar, `business-owner` los referencia con un cast (`appointments/constants/payment-proof.constants.ts`).
+- `PAYMENT_PROOF_UPLOADED` y `PAYMENT_PROOF_REJECTED` (comprobantes de transferencia bancaria, consumidos/emitidos por `business-owner`) ya están publicados en `main`.
 
 ### BaseRepository (multi-tenancy automático)
 `BaseRepository<DbEntity, DomainEntity>(adapter, eventPublisher, config)`. Los repositorios de los servicios **heredan** de esta clase y solo añaden métodos de dominio.
