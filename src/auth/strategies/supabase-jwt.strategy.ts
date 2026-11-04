@@ -4,6 +4,10 @@ import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SharedConfigService } from '../../config/env.config';
 
+/** How long a successful "user still exists" check is reused */
+const USER_CHECK_TTL_MS = 60_000;
+const USER_CHECK_CACHE_MAX_ENTRIES = 10_000;
+
 /**
  * Supabase JWT Strategy
  *
@@ -60,6 +64,37 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
     );
   }
 
+  /** userId -> instant until which the existence check is considered fresh */
+  private readonly verifiedUsers = new Map<string, number>();
+
+  private async assertUserExists(userId: string): Promise<void> {
+    const now = Date.now();
+    const freshUntil = this.verifiedUsers.get(userId);
+    if (freshUntil !== undefined && freshUntil > now) {
+      return;
+    }
+
+    const { data, error } = await this.supabase.auth.admin.getUserById(userId);
+
+    if (error || !data.user) {
+      this.verifiedUsers.delete(userId);
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    if (this.verifiedUsers.size >= USER_CHECK_CACHE_MAX_ENTRIES) {
+      for (const [id, until] of this.verifiedUsers) {
+        if (until <= now) {
+          this.verifiedUsers.delete(id);
+        }
+      }
+      if (this.verifiedUsers.size >= USER_CHECK_CACHE_MAX_ENTRIES) {
+        this.verifiedUsers.clear();
+      }
+    }
+
+    this.verifiedUsers.set(userId, now + USER_CHECK_TTL_MS);
+  }
+
   /**
    * Validates the JWT payload and enriches user data
    *
@@ -68,12 +103,10 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
    * @throws UnauthorizedException if user is invalid
    */
   async validate(payload: any) {
-    // Verify user exists in Supabase Auth
-    const { data, error } = await this.supabase.auth.admin.getUserById(payload.sub);
-
-    if (error || !data.user) {
-      throw new UnauthorizedException('Invalid token');
-    }
+    // The signature is already verified; confirming with Supabase that the user still exists
+    // is cached briefly so it does not cost a network round-trip on every request.
+    // Trade-off: a user deleted in Supabase can keep acting for at most USER_CHECK_TTL_MS.
+    await this.assertUserExists(payload.sub);
 
     // Extract user data and custom claims
     return {

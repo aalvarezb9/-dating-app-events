@@ -7,7 +7,36 @@ import { ExecutionContext } from '../../common/context/execution-context.service
 import { randomUUID } from 'crypto';
 import { PaginationQuery, PaginatedResult, createPaginatedResult } from '../../common/dto/pagination.dto';
 import { DynamicFilters, FilterOperator } from '../../common/dto/filterable-query.dto';
-import { Between, MoreThanOrEqual, LessThanOrEqual, In, Not, Like, ILike, EntityManager, Repository, ObjectLiteral } from 'typeorm';
+import { Between, MoreThan, MoreThanOrEqual, LessThan, LessThanOrEqual, In, Not, Like, ILike, FindOperator, EntityManager, Repository, ObjectLiteral } from 'typeorm';
+
+/** SQL aggregate functions supported by BaseRepository.aggregate() */
+export type AggregateFunction = 'count' | 'sum' | 'avg' | 'min' | 'max';
+
+/**
+ * One value to compute: `count` needs no field (counts rows), the others need the
+ * entity property to aggregate (e.g. `{ fn: 'sum', field: 'price' }`).
+ */
+export interface AggregateMetric {
+  fn: AggregateFunction;
+  field?: string;
+}
+
+export interface AggregateOptions<M extends Record<string, AggregateMetric>> {
+  /** Named metrics to compute, e.g. `{ total: { fn: 'count' }, revenue: { fn: 'sum', field: 'price' } }` */
+  metrics: M;
+  /** Entity property to group by (one result row per distinct value, exposed as `group`) */
+  groupBy?: string;
+  /** Same dynamic filters (with operators) as findManyWithPagination */
+  filters?: DynamicFilters;
+}
+
+export type AggregateRow<M extends Record<string, AggregateMetric>> = { group?: any } & {
+  [K in keyof M]: number;
+};
+
+const AGGREGATE_FUNCTIONS: AggregateFunction[] = ['count', 'sum', 'avg', 'min', 'max'];
+const SAFE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const GROUP_ALIAS = 'groupValue';
 
 /**
  * Base repository class with DDD support and automatic tenant isolation
@@ -502,8 +531,13 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
         continue;
       }
 
-      // Direct value (equality)
-      if (typeof value !== 'object' || value === null || value instanceof Date) {
+      // Direct value (equality) or an operator that is already a TypeORM FindOperator
+      if (
+        typeof value !== 'object' ||
+        value === null ||
+        value instanceof Date ||
+        value instanceof FindOperator
+      ) {
         conditions[field] = value;
         continue;
       }
@@ -516,11 +550,11 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       } else if ('$ne' in filterObj) {
         conditions[field] = Not(filterObj.$ne);
       } else if ('$gt' in filterObj) {
-        conditions[field] = MoreThanOrEqual(filterObj.$gt);
+        conditions[field] = MoreThan(filterObj.$gt);
       } else if ('$gte' in filterObj) {
         conditions[field] = MoreThanOrEqual(filterObj.$gte);
       } else if ('$lt' in filterObj) {
-        conditions[field] = LessThanOrEqual(filterObj.$lt);
+        conditions[field] = LessThan(filterObj.$lt);
       } else if ('$lte' in filterObj) {
         conditions[field] = LessThanOrEqual(filterObj.$lte);
       } else if ('$between' in filterObj) {
@@ -612,6 +646,106 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       return createPaginatedResult(domainData, total, { page, limit } as any);
     } catch (error) {
       this.logger.error(`Error in findManyWithPagination for ${this.config.entityName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Compute counts / sums / averages / min / max in ONE SQL query instead of loading rows
+   * and filtering them in memory. Tenant and soft-delete filtering are applied exactly like
+   * in findManyWithPagination, and `filters` accept the same operators.
+   *
+   * Values come back as numbers (COUNT/SUM/AVG are strings in the pg driver); an aggregate
+   * over no rows is 0.
+   *
+   * @example Statistics grouped by status, plus revenue
+   * ```typescript
+   * const rows = await repository.aggregate({
+   *   groupBy: 'status',
+   *   metrics: { total: { fn: 'count' }, revenue: { fn: 'sum', field: 'price' } },
+   * });
+   * // [{ group: 'reserved', total: 2, revenue: 100 }, { group: 'completed', total: 5, revenue: 250 }]
+   * ```
+   *
+   * @example Single-row metric with filters
+   * ```typescript
+   * const [{ upcoming }] = await repository.aggregate({
+   *   metrics: { upcoming: { fn: 'count' } },
+   *   filters: { scheduledAt: { $between: [from, to] }, status: { $in: ['reserved', 'confirmed'] } },
+   * });
+   * ```
+   */
+  async aggregate<M extends Record<string, AggregateMetric>>(
+    options: AggregateOptions<M>,
+  ): Promise<Array<AggregateRow<M>>> {
+    const { metrics, groupBy, filters = {} } = options;
+    const entries = Object.entries(metrics);
+
+    if (entries.length === 0) {
+      throw new Error('aggregate() requires at least one metric');
+    }
+    if (groupBy !== undefined && !SAFE_IDENTIFIER.test(groupBy)) {
+      throw new Error(`aggregate(): invalid groupBy "${groupBy}"`);
+    }
+
+    // Aliases, functions and fields end up in the SQL text: allow only known-safe values
+    const expressions = entries.map(([alias, metric]) => {
+      if (!SAFE_IDENTIFIER.test(alias) || alias === GROUP_ALIAS) {
+        throw new Error(`aggregate(): invalid metric name "${alias}"`);
+      }
+      if (!AGGREGATE_FUNCTIONS.includes(metric.fn)) {
+        throw new Error(`aggregate(): unsupported function "${metric.fn}" in "${alias}"`);
+      }
+      if (metric.field !== undefined && !SAFE_IDENTIFIER.test(metric.field)) {
+        throw new Error(`aggregate(): invalid field "${metric.field}" in "${alias}"`);
+      }
+      if (metric.fn !== 'count' && !metric.field) {
+        throw new Error(`aggregate(): "${metric.fn}" in "${alias}" requires a field`);
+      }
+
+      const target = metric.field ? `e.${metric.field}` : '*';
+      return { alias, sql: `${metric.fn.toUpperCase()}(${target})` };
+    });
+
+    try {
+      let conditions = this.addTenantFilter(this.buildTypeOrmConditions(filters));
+      conditions = this.addSoftDeleteFilter(conditions);
+
+      const repository = (this.adapter as any).repository;
+      if (!repository || !repository.createQueryBuilder) {
+        throw new Error('aggregate() requires TypeORM repository adapter');
+      }
+
+      const queryBuilder = repository.createQueryBuilder('e');
+      expressions.forEach(({ alias, sql }, index) => {
+        if (index === 0) {
+          queryBuilder.select(sql, alias);
+        } else {
+          queryBuilder.addSelect(sql, alias);
+        }
+      });
+
+      if (groupBy) {
+        queryBuilder.addSelect(`e.${groupBy}`, GROUP_ALIAS).groupBy(`e.${groupBy}`);
+      }
+      if (Object.keys(conditions).length > 0) {
+        queryBuilder.where(conditions);
+      }
+
+      const rows: Array<Record<string, any>> = await queryBuilder.getRawMany();
+
+      return rows.map((raw) => {
+        const row: Record<string, any> = {};
+        if (groupBy) {
+          row.group = raw[GROUP_ALIAS];
+        }
+        for (const { alias } of expressions) {
+          row[alias] = Number(raw[alias] ?? 0);
+        }
+        return row as AggregateRow<M>;
+      });
+    } catch (error) {
+      this.logger.error(`Error in aggregate for ${this.config.entityName}:`, error);
       throw error;
     }
   }

@@ -7,9 +7,15 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
+import { redactSensitive } from '../utils/redact';
+
+const MAX_LOGGED_BODY_LENGTH = 2000;
 
 /**
- * Interceptor to log all incoming requests and their response time
+ * Interceptor to log all incoming requests and their response time.
+ *
+ * Request bodies are logged only after masking credentials, tokens and banking /
+ * identity fields (see redactSensitive), and truncated.
  */
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -21,8 +27,13 @@ export class LoggingInterceptor implements NestInterceptor {
     const userEmail = user?.email || 'anonymous';
     const now = Date.now();
 
+    let loggedBody = JSON.stringify(redactSensitive(body)) ?? '';
+    if (loggedBody.length > MAX_LOGGED_BODY_LENGTH) {
+      loggedBody = `${loggedBody.slice(0, MAX_LOGGED_BODY_LENGTH)}…[truncated]`;
+    }
+
     this.logger.log(
-      `→ ${method} ${url} | User: ${userEmail} | Body: ${JSON.stringify(body)}`,
+      `→ ${method} ${url} | User: ${userEmail} | Body: ${loggedBody}`,
     );
 
     return next.handle().pipe(

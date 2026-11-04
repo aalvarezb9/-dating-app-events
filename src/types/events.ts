@@ -31,6 +31,8 @@ export enum DomainEventType {
   PAYMENT_REFUNDED = 'PAYMENT_REFUNDED',
   PAYMENT_REQUIRED = 'PAYMENT_REQUIRED',              // NEW: Payment required for reservation
   PAYMENT_COMPLETED = 'PAYMENT_COMPLETED',            // NEW: Payment completed successfully
+  PAYMENT_PROOF_UPLOADED = 'PAYMENT_PROOF_UPLOADED',  // Bank-transfer proof uploaded for an appointment (consumed by business-owner)
+  PAYMENT_PROOF_REJECTED = 'PAYMENT_PROOF_REJECTED',  // Business owner rejected the bank-transfer proof
 
   // Reservation Events
   RESERVATION_EXPIRATION_CHECK = 'RESERVATION_EXPIRATION_CHECK',   // NEW: Delayed job to check expiration
