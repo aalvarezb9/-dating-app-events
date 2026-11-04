@@ -39,6 +39,9 @@ npm test          # jest
 |---|---|---|
 | Leer una variable de entorno | `SharedConfigService` | `config/env.config.ts` |
 | Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
+| Publicar un evento sin que se pierda aunque Kafka falle | `OutboxService.enqueue(manager, evento)` (misma transacción que el cambio) | `outbox/` |
+| Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
+| Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
 | Declarar una tabla (columnas de auditoría, tenant, prefijo del servicio) | `@Entity` + `TenantEntity` / `GlobalEntity` | `database/entities/` |
 | Contar / sumar / agrupar (estadísticas) | `repo.aggregate(...)` | `repositories/base/BaseRepository.ts` |
 | Listado paginado con filtros dinámicos | `repo.findManyWithPagination(...)` + `PaginationDto`/`FilterableQueryDto` | `BaseRepository.ts`, `common/dto/` |
@@ -158,6 +161,25 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 `BaseRepository` deduce el aislamiento de la herencia: entidad `TenantEntity` → filtra por `tenantId` e inyecta el tenant al crear; `GlobalEntity` → nunca filtra. Las entidades antiguas (que no heredan de las bases) siguen funcionando con `tenantIdField`.
 
 **`SERVICE_NAMESPACE`** es ahora una **abreviatura** (2–6 minúsculas: `bo`, `sch`, `usr`, `auth`, `adm`, `ntf`; `SharedConfigService.serviceNamespace` la valida) y es el prefijo de las tablas y el actor de las escrituras del sistema. El nombre largo del servicio va en **`SERVICE_NAME`** (`SharedConfigService.serviceName`), usado como `clientId` de Kafka y `source` de los eventos. Transitorio: mientras un servicio no defina `SERVICE_NAME`, `serviceName` cae a `SERVICE_NAMESPACE`.
+
+### Contratos entre servicios, outbox y proyecciones
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `contracts/catalog.contracts.ts` | Payloads (`event.data`) de `SERVICE_/TEAM_MEMBER_/BUSINESS_PROFILE_UPSERTED`, `*_DELETED`, `LANDING_PAGE_UPSERTED`, `REVIEW_UPSERTED`; base `ProjectionPayload` (`id`, `tenantId`, `sourceVersion`). Nivel *interno*: nunca banco, documentos legales ni facturación | Emitir o consumir datos de catálogo de business-owner. Solo se **añaden** campos |
+| `contracts/appointment-request.contract.ts` | `AppointmentRequestCreatedData` (evento v2: solicitud completa, con precio/duración copiados) y `AppointmentRequestRejectedData` | Emitir (business-owner, users) o consumir (schedule) una solicitud de cita |
+| `contracts/event-builders.ts` | `projectionEvent(...)` arma el `DomainEvent` (id de fila = `aggregateId`, orden por partición); `sourceVersionOf(row)` = `modified_at` en ms | Al construir cualquier `*_UPSERTED`/`*_DELETED` |
+| `outbox/outbox-event.entity.ts` | Tabla `<ns>_outbox_events` (`GlobalEntity`): evento serializado, `status` (`pending`/`published`/`failed`), intentos | Añadir `...OUTBOX_ENTITIES` a las entidades de TypeORM del servicio |
+| `outbox/outbox.service.ts` | `enqueue(manager, evento, clave?)`: inserta el evento **en la misma transacción** que el cambio | Siempre que un cambio deba anunciarse a otros servicios (en lugar de `publishEvent` tras el commit, que puede perderse) |
+| `outbox/outbox-relay.service.ts` | `OutboxRelay`: publica a Kafka en orden, un relevo activo por servicio (advisory lock), reintenta y aparca tras `maxAttempts`; limpia lo publicado | Arranca solo con `OutboxModule.forRoot()`; `drain()` permite forzar un envío |
+| `outbox/outbox.module.ts` | `OutboxModule.forRoot({ enabled, pollIntervalMs, batchSize, maxAttempts, retentionDays })` | Importarlo en el `AppModule` (requiere `EventsModule`, `SharedConfigModule` y TypeORM) |
+| `projections/projected-entity.ts` | `ProjectedEntity` (`TenantEntity` + `source_version` + `deleted_at`): base de una **copia local de solo lectura** de una fila ajena; la PK usa el mismo id que el dueño | Tabla de proyección en el consumidor (`@PrimaryColumn('uuid') id` + las columnas que necesite) |
+| `projections/apply-projection.ts` | `applyProjection(manager, Entidad, payload, { deleted? })`: upsert **idempotente y ordenado por versión**, con lápidas; no emite eventos | En el consumer de cada `*_UPSERTED`/`*_DELETED` y al sincronizar snapshots (dentro de transacción y de `ExecutionContext.run({ tenantId })`) |
+| `projections/snapshot.ts` | Dueño: `readSnapshotPage(repo, { updatedSince, cursor, limit, where })` (paginación por `(modified_at, id)`, incluye borrados). Consumidor: `syncSnapshot(fetchPage, apply)` | Arranque con tabla vacía y reconciliación periódica de una proyección |
+| `common/decorators/internal-api.decorator.ts` + `common/guards/internal-api-key.guard.ts` | `@InternalApi()`: sin JWT pero **exige** `X-API-Key` (`INTER_SERVICE_API_KEY`, comparación en tiempo constante; falla si no está configurada) y es cross-tenant. `JwtAuthGuard` lo deja pasar | Endpoints `/internal/v1/*` llamados solo por otros servicios; nunca en el gateway. **No es `@Public()`** (el `ApiKeyGuard` antiguo sí se salta con `@Public()`) |
+| `services/event-publisher.service.ts` | Nuevo `publishEventOrThrow`: como `publishEvent` pero **lanza** si Kafka no lo entregó | Lo usa el relevo del outbox; el resto sigue con `publishEvent` (fire-and-forget) |
+
+Eventos nuevos en `DomainEventType`: `SERVICE_UPSERTED/DELETED`, `TEAM_MEMBER_UPSERTED/DELETED`, `BUSINESS_PROFILE_UPSERTED`, `LANDING_PAGE_UPSERTED`, `REVIEW_UPSERTED`, `APPOINTMENT_REQUEST_CREATED`, `APPOINTMENT_REQUEST_REJECTED` (los dos últimos antes se usaban como strings). `BUSINESS_PROFILE_UPDATED` queda como legado.
 
 ### Otros módulos
 

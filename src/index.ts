@@ -58,6 +58,15 @@ export * from './database/transaction-manager';
 export * from './database/advisory-lock-manager';
 export * from './database/entities';
 
+// Contracts between services (events, projections, requests)
+export * from './contracts';
+
+// Transactional outbox (reliable event publication)
+export * from './outbox';
+
+// Projections (local read copies of other services' data) and snapshots
+export * from './projections';
+
 // Encryption
 export * from './encryption/encryption.service';
 export * from './encryption/encryption.module';

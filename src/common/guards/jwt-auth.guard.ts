@@ -6,6 +6,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { IS_INTERNAL_API_KEY } from '../decorators/internal-api.decorator';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('supabase-jwt') {
@@ -19,7 +20,13 @@ export class JwtAuthGuard extends AuthGuard('supabase-jwt') {
       context.getClass(),
     ]);
 
-    if (isPublic) {
+    // Internal endpoints have no user: InternalApiKeyGuard (applied by @InternalApi()) protects them
+    const isInternal = this.reflector.getAllAndOverride<boolean>(IS_INTERNAL_API_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic || isInternal) {
       return true;
     }
 

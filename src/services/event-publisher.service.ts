@@ -156,6 +156,24 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Publish one event and FAIL if it could not be delivered to Kafka.
+   *
+   * publishEvent() swallows delivery errors (fire-and-forget). The outbox relay needs to know
+   * whether the event really left, so it retries the ones that did not.
+   */
+  async publishEventOrThrow(event: DomainEvent, partitionKey?: string): Promise<void> {
+    const completeEvent = {
+      ...event,
+      eventId: event.eventId || randomUUID(),
+      timestamp: event.timestamp || new Date(),
+    };
+    const key = partitionKey || event.aggregateId || event.tenantId || randomUUID();
+
+    await lastValueFrom(this.client.emit(event.eventType, { value: completeEvent, key }));
+    this.logger.debug(`Event emitted to Kafka: ${event.eventType} (id: ${completeEvent.eventId}, key: ${key})`);
+  }
+
+  /**
    * Publish multiple domain events in batch (Fire-and-Forget)
    *
    * @param events - Array of domain events
