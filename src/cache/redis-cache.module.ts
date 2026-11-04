@@ -1,7 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-redis-yet';
-import type { RedisClientOptions } from 'redis';
+import { Keyv } from 'keyv';
+import KeyvRedis from '@keyv/redis';
 import { SharedConfigService } from '../config/env.config';
 
 /**
@@ -65,15 +65,14 @@ export class RedisCacheModule {
           useFactory: async (config: SharedConfigService) => {
             const redisConfig = config.redis;
 
+            // cache-manager v6 takes Keyv stores: the `store:` option of v5 is silently ignored and
+            // the cache falls back to process memory. No namespace: keys are stored exactly as given.
+            const auth = redisConfig.password ? `:${encodeURIComponent(redisConfig.password)}@` : '';
+            const url = `redis://${auth}${redisConfig.host}:${redisConfig.port}`;
+
             return {
-              store: await redisStore({
-                socket: {
-                  host: redisConfig.host,
-                  port: redisConfig.port,
-                },
-                password: redisConfig.password,
-                ttl: 3600000, // Default TTL: 1 hour (in milliseconds)
-              }),
+              stores: [new Keyv({ store: new KeyvRedis(url), namespace: '' })],
+              ttl: 3600000, // Default TTL: 1 hour (in milliseconds)
             };
           },
         }),

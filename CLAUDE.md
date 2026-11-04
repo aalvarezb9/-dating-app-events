@@ -14,7 +14,7 @@ Los servicios NO ven los cambios hasta que se publican y reinstalan:
 
 1. Editar aquí y verificar: `npm run build` (compila a `dist/`, que está en `.gitignore`; `prepare` lo regenera al instalar desde GitHub).
 2. Commit y push a `main` del repo `aalvarezb9/-dating-app-events`.
-3. En cada servicio consumidor: `npm install @dating-app/events@latest` (actualiza el commit fijado en `package-lock.json`).
+3. En cada servicio consumidor: `npm install @dating-app/events --legacy-peer-deps` (actualiza el commit fijado en `package-lock.json`).
 4. Para correr en Docker (`backend-all-services`): reconstruir la imagen del servicio (`docker-compose build <servicio>`), porque `Dockerfile.dev` hace `npm ci` y el lockfile fija el commit de la librería. El volumen montado solo cubre `src/` del servicio, **no** la librería.
 
 Desarrollo iterativo sin push: `npm run dev` (`tsc --watch`) aquí y enlazar localmente en el servicio (`npm link`) — no commitear ese enlace en el `package.json` del servicio.
@@ -115,7 +115,7 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | `database/advisory-lock-manager.ts` | `AdvisoryLockManager.runWithLock/runWithLocks(dataSource, claves, callback)`: advisory locks de PostgreSQL ligados a una transacción; entrega el `EntityManager` a usar | "Comprobar + insertar" que no debe ejecutarse a la vez (citas, reseñas, subdominios). **Las tablas de citas exigen el lock compartido** (ver CLAUDE.md del orquestador). Dentro del callback usa el `manager` entregado |
 | `database/transaction-manager.ts` | `TransactionManager.run/runSimple`: transacción con callbacks de limpieza (`registerCleanup`) si hace rollback | Varias escrituras que deben ser atómicas o con efectos a deshacer |
 | `cache/redis-lock-manager.ts` | `RedisLockManager`: `acquireLock/releaseLock/isLocked/getLockValue/extendLock` con TTL | Retener un recurso un tiempo (slot reservado a la espera de pago); no sustituye al advisory lock |
-| `cache/redis-cache.module.ts` | `RedisCacheModule.forRoot()`: cache-manager sobre Redis | Cache compartida y base de `RedisLockManager` |
+| `cache/redis-cache.module.ts` | `RedisCacheModule.forRoot()`: cache-manager v6 sobre Redis mediante Keyv (`@keyv/redis`, sin namespace: las claves se guardan tal cual). Los consumidores necesitan `@keyv/redis` y `keyv` instalados | Cache compartida y base de `RedisLockManager` |
 
 ### HTTP: contexto, decoradores, guards, interceptors, filtros (`common/`)
 
