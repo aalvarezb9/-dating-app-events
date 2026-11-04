@@ -763,6 +763,19 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
   }
 
   /**
+   * Tenant announced in the envelope of an event: the tenant of the row itself; if it has none
+   * (legacy entity with another tenant field), the one set on the repository or the one of the
+   * request. Tables without tenant (GlobalEntity) announce none.
+   */
+  private eventTenantId(entity: DbEntity): string | undefined {
+    if (this.entityScope === 'global') {
+      return undefined;
+    }
+    const ofRow = (entity as any)?.[this.config.tenantIdField!];
+    return ofRow || this.tenantId || ExecutionContext.getTenantId() || undefined;
+  }
+
+  /**
    * Handle event emission
    */
   protected async handleEventEmission(
@@ -820,7 +833,9 @@ export class BaseRepository<DbEntity = any, DomainEntity = DbEntity> {
       eventId: randomUUID(),
       aggregateId: (entity as any)[this.config.idField!],
       aggregateType: this.config.entityName,
-      tenantId: this.tenantId || undefined,
+      // Tenant of the row the event is about; for rows without a tenant column, the one of the request
+      tenantId: this.eventTenantId(entity),
+      userId: ExecutionContext.getUserId() || undefined,
       timestamp: new Date(),
       version: 1,
       data: eventData,
