@@ -187,7 +187,7 @@ Eventos nuevos en `DomainEventType`: `SERVICE_UPSERTED/DELETED`, `TEAM_MEMBER_UP
 |---|---|---|
 | `encryption/encryption.service.ts` | `EncryptionService.encrypt/decrypt`: AES-256-GCM, clave derivada con scrypt y sal aleatoria (`v2:`), lee el formato antiguo | Datos sensibles en BD (cuentas bancarias). Requiere `ENCRYPTION_KEY` ≥ 32 caracteres |
 | `encryption/encryption.module.ts` | `EncryptionModule` | Importarlo donde se cifra |
-| `http-client/base-service-client.ts` | `BaseServiceClient`: cliente Axios con API key, timeout y manejo de errores (`get/post/patch/put/delete`) | Una clase por servicio remoto (`AuthServiceClient`) |
+| `http-client/base-service-client.ts` | `BaseServiceClient`: cliente Axios con API key, timeout y manejo de errores (`get/post/patch/put/delete`); un error HTTP del servicio remoto se relanza con su mismo estado (400/401/403/404/409 como excepciones de Nest) para que el llamador distinga un 404 de un fallo | Una clase por servicio remoto (`AuthServiceClient`) |
 | `http-client/http-client.module.ts` | `HttpClientModule` | Importarlo donde hay clientes HTTP |
 | `index.ts` | Reexporta lo público | Todo export nuevo pasa por aquí |
 

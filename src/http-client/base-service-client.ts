@@ -1,4 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
@@ -119,6 +128,17 @@ export abstract class BaseServiceClient {
     return `${cleanBaseURL}/${cleanEndpoint}`;
   }
 
+  private toHttpException(status: number, message: string): HttpException {
+    switch (status) {
+      case 400: return new BadRequestException(message);
+      case 401: return new UnauthorizedException(message);
+      case 403: return new ForbiddenException(message);
+      case 404: return new NotFoundException(message);
+      case 409: return new ConflictException(message);
+      default: return new HttpException(message, status);
+    }
+  }
+
   /**
    * Handle HTTP errors
    */
@@ -129,9 +149,8 @@ export abstract class BaseServiceClient {
       this.logger.error(
         `HTTP ${method} ${endpoint} failed with ${status}: ${JSON.stringify(data)}`,
       );
-      throw new Error(
-        data?.message || `Service request failed with status ${status}`,
-      );
+      // Keep the status the other service answered with, so the caller can tell a 404 from a failure
+      throw this.toHttpException(status, data?.message || `Service request failed with status ${status}`);
     } else if (error.request) {
       // Request made but no response
       this.logger.error(`HTTP ${method} ${endpoint} - No response from service`);
