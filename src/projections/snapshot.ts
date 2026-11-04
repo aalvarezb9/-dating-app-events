@@ -56,14 +56,16 @@ export async function readSnapshotPage<E extends ObjectLiteral>(
   }
   if (query.cursor) {
     const { modifiedAt, id } = decodeSnapshotCursor(query.cursor);
-    qb.andWhere('(e.modifiedAt, e.id) > (:cursorModifiedAt, :cursorId)', {
+    // Postgres keeps microseconds, the cursor (a JS Date) only milliseconds: compare at ms precision
+    // or the last row of every page comes back again at the top of the next one
+    qb.andWhere("(date_trunc('milliseconds', e.modifiedAt), e.id) > (:cursorModifiedAt, :cursorId)", {
       cursorModifiedAt: modifiedAt,
       cursorId: id,
     });
   }
 
   const rows = await qb
-    .orderBy('e.modifiedAt', 'ASC')
+    .orderBy("date_trunc('milliseconds', e.modifiedAt)", 'ASC')
     .addOrderBy('e.id', 'ASC')
     .limit(limit + 1)
     .getMany();
