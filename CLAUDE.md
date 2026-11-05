@@ -176,7 +176,7 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | `outbox/outbox.module.ts` | `OutboxModule.forRoot({ enabled, pollIntervalMs, batchSize, maxAttempts, retentionDays })` | Importarlo en el `AppModule` (requiere `EventsModule`, `SharedConfigModule` y TypeORM) |
 | `projections/projected-entity.ts` | `ProjectedEntity` (`TenantEntity` + `source_version` + `deleted_at`): base de una **copia local de solo lectura** de una fila ajena; la PK usa el mismo id que el dueño | Tabla de proyección en el consumidor (`@PrimaryColumn('uuid') id` + las columnas que necesite) |
 | `projections/apply-projection.ts` | `applyProjection(manager, Entidad, payload, { deleted? })`: upsert **idempotente y ordenado por versión**, con lápidas; no emite eventos | En el consumer de cada `*_UPSERTED`/`*_DELETED` y al sincronizar snapshots (dentro de transacción y de `ExecutionContext.run({ tenantId })`) |
-| `projections/snapshot.ts` | Dueño: `readSnapshotPage(repo, { updatedSince, cursor, limit, where })` (paginación por `(modified_at, id)`, incluye borrados). Consumidor: `syncSnapshot(fetchPage, apply)` | Arranque con tabla vacía y reconciliación periódica de una proyección |
+| `projections/snapshot.ts` | Dueño: `readSnapshotPage(repo, { updatedSince, cursor, limit, where })` (paginación por `(modified_at, id)` comparada a precisión de **milisegundos**: Postgres guarda microsegundos pero el cursor viaja como `Date`, y sin recortar la última fila de cada página se repetía; incluye borrados). Consumidor: `syncSnapshot(fetchPage, apply)` | Arranque con tabla vacía y reconciliación periódica de una proyección |
 | `common/decorators/internal-api.decorator.ts` + `common/guards/internal-api-key.guard.ts` | `@InternalApi()`: sin JWT pero **exige** `X-API-Key` (`INTER_SERVICE_API_KEY`, comparación en tiempo constante; falla si no está configurada) y es cross-tenant. `JwtAuthGuard` lo deja pasar | Endpoints `/internal/v1/*` llamados solo por otros servicios; nunca en el gateway. **No es `@Public()`** (el `ApiKeyGuard` antiguo sí se salta con `@Public()`) |
 | `services/event-publisher.service.ts` | Nuevo `publishEventOrThrow`: como `publishEvent` pero **lanza** si Kafka no lo entregó | Lo usa el relevo del outbox; el resto sigue con `publishEvent` (fire-and-forget) |
 
@@ -224,7 +224,7 @@ Para añadir un proveedor: crear la estrategia en `auth/strategies/` o `storage/
 
 - **API**: `save`, `create`, `findById`, `findOne`, `findMany(criteria, options)`, `findAll`, `findManyWithPagination(filters, pagination)`, `aggregate({ metrics, groupBy?, filters? })`, `update`, `delete`, `softDelete`, `restore`, `exists`, `count`, `withTransaction(manager)`, `setTenantId`, `getTenantId`.
 - **Filtro de tenant** (`addTenantFilter`), en este orden: `@CrossTenant()` → sin filtro; `@Public()` → sin filtro; si no, exige `tenantId` del `ExecutionContext` (o `setTenantId`) y lanza error si falta. El campo se configura con `tenantIdField` (default `tenantId`; p. ej. `businessTenantId`).
-- **Soft delete**: activo por defecto (`softDeleteField` default `deletedAt`); `@IncludeDeleted()` lo omite.
+- **Soft delete**: activo por defecto (`softDeleteField` default `deletedAt`); `@IncludeDeleted()` lo omite. `softDelete`/`delete` anuncian el evento de borrado (`publishOnSoftDelete`, `eventTypeOnSoftDelete`) con la fila **tal como era, marcada como borrada**: los adaptadores ocultan las filas borradas, así que no se puede releer después de borrar (así llegan las lápidas `*_DELETED` a quien guarda una copia).
 - **Eventos** (`config.events`): `publishOnCreate/Update/Delete/SoftDelete/Restore`, `eventTypeOn*`, `eventFilter`, `eventKeyExtractor` (clave de partición), `eventDataExtractor`, `eventMetadata`. El sobre del evento lleva `tenantId` de la **fila** (si no la tiene, el del repositorio o el de la petición; las tablas `GlobalEntity` no anuncian tenant) y `userId` del contexto (vacío en consumers y crons).
 - **Transacciones**: `repo.withTransaction(manager)` devuelve un clon ligado al `EntityManager`. Usar `TransactionManager.run(dataSource, async (manager, registerCleanup) => …)`.
 - **Operadores de filtro dinámico** (`findManyWithPagination`, `aggregate`): `$eq $ne $gt $gte $lt $lte $between $in $notIn $like $ilike`. `$gt`/`$lt` son estrictos; un valor que ya es un `FindOperator` de TypeORM se respeta tal cual.
@@ -244,13 +244,16 @@ Para añadir un proveedor: crear la estrategia en `auth/strategies/` o `storage/
 - `RedisLockManager`: locks con TTL en Redis (reservas de slots).
 
 ### Cliente HTTP inter-servicio
-Extender `BaseServiceClient` (baseURL, `apiKey`, `serviceName`, timeout); métodos `get/post/patch/…` con autenticación por API key. Ver `AuthServiceClient` en business-owner como ejemplo.
+Extender `BaseServiceClient` (baseURL, `apiKey`, `serviceName`, timeout); métodos `get/post/patch/…` con autenticación por API key (`X-API-Key`). Ver `AuthServiceClient`, `ScheduleServiceClient` (business-owner) o `BusinessOwnerClient` (schedule, users) como ejemplo.
+
+**Los errores conservan su estado.** Si el servicio remoto responde con un error HTTP, el cliente lanza la excepción de Nest equivalente: 400 → `BadRequestException`, 401 → `UnauthorizedException`, 403 → `ForbiddenException`, 404 → `NotFoundException`, 409 → `ConflictException`, el resto → `HttpException(mensaje, estado)`. El llamador puede decidir (`catch (e) { if (e instanceof NotFoundException) … }`) y un 404 del otro servicio ya no se convierte en un 500. Un fallo de red o un timeout lanza un `Error` genérico: ante eso **no asumas nada** (p. ej. no borres ni aceptes). La llamada va solo con la API key, sin JWT del usuario: el destino expone el endpoint con `@InternalApi()` y el negocio o el usuario viajan explícitos.
 
 ## Convenciones al contribuir
 
 - Código, identificadores y comentarios en inglés; documentación (CLAUDE.md, READMEs) en español.
 - Todo export público pasa por `index.ts`. No exportar `DynamoDBAdapter` salvo decisión explícita (arrastra dependencias AWS opcionales).
 - Dependencias de Nest/TypeORM/Supabase son `peerDependencies`: no añadirlas como `dependencies`.
+- Con `npm install --legacy-peer-deps` npm **no instala los peers**: cada servicio debe declarar los que usa (`@nestjs/config`, `@nestjs/microservices`, `@nestjs/cache-manager`, `cache-manager`, `keyv`, `@keyv/redis`, `@nestjs/axios` si usa clientes HTTP…). Al añadir un peer nuevo a la librería, añádelo también a los servicios que la usan.
 - Mantener `peerDependenciesMeta` de AWS como opcionales.
 
 ## Deuda conocida
