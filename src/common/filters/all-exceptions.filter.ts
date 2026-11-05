@@ -72,7 +72,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message,
       error: errorName,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: redactUrl(request.url), // the caller's own logs must not keep the token of a link either
     });
   }
 }

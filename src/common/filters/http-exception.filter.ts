@@ -49,7 +49,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message,
       error: exception.name,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: redactUrl(request.url), // the caller's own logs must not keep the token of a link either
     });
   }
 }
