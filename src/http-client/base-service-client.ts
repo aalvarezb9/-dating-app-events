@@ -11,6 +11,7 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import { redactUrl } from '../common/utils/redact';
 
 export interface HttpRequestOptions {
   headers?: Record<string, string>;
@@ -142,7 +143,8 @@ export abstract class BaseServiceClient {
   /**
    * Handle HTTP errors
    */
-  protected handleError(error: AxiosError<ErrorResponse>, method: string, endpoint: string): never {
+  protected handleError(error: AxiosError<ErrorResponse>, method: string, rawEndpoint: string): never {
+    const endpoint = redactUrl(rawEndpoint); // the path may carry the token of an appointment link
     if (error.response) {
       // Server responded with error
       const { status, data } = error.response;
@@ -171,7 +173,7 @@ export abstract class BaseServiceClient {
       const url = this.buildURL(endpoint);
       const config = this.buildConfig(options);
 
-      this.logger.debug(`GET ${url}`);
+      this.logger.debug(`GET ${redactUrl(url)}`);
 
       const response = await firstValueFrom(
         this.httpService.get<T>(url, config),
@@ -192,7 +194,7 @@ export abstract class BaseServiceClient {
       const url = this.buildURL(endpoint);
       const config = this.buildConfig(options);
 
-      this.logger.debug(`POST ${url}`);
+      this.logger.debug(`POST ${redactUrl(url)}`);
 
       const response = await firstValueFrom(
         this.httpService.post<T>(url, body, config),
@@ -213,7 +215,7 @@ export abstract class BaseServiceClient {
       const url = this.buildURL(endpoint);
       const config = this.buildConfig(options);
 
-      this.logger.debug(`PATCH ${url}`);
+      this.logger.debug(`PATCH ${redactUrl(url)}`);
 
       const response = await firstValueFrom(
         this.httpService.patch<T>(url, body, config),
@@ -234,7 +236,7 @@ export abstract class BaseServiceClient {
       const url = this.buildURL(endpoint);
       const config = this.buildConfig(options);
 
-      this.logger.debug(`PUT ${url}`);
+      this.logger.debug(`PUT ${redactUrl(url)}`);
 
       const response = await firstValueFrom(
         this.httpService.put<T>(url, body, config),
@@ -255,7 +257,7 @@ export abstract class BaseServiceClient {
       const url = this.buildURL(endpoint);
       const config = this.buildConfig(options);
 
-      this.logger.debug(`DELETE ${url}`);
+      this.logger.debug(`DELETE ${redactUrl(url)}`);
 
       const response = await firstValueFrom(
         this.httpService.delete<T>(url, config),

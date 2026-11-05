@@ -146,7 +146,7 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | `filters/all-exceptions.filter.ts`, `http-exception.filter.ts` | Convierten excepciones en respuestas JSON uniformes | Filtro global en `main.ts` |
 | `types/auth.types.ts` | `UserRole` (`super_admin`, `business_owner`, `business_staff`, `customer`, `guest`) y `TenantType` | Cualquier chequeo de rol/tipo |
 | `constants/currencies.ts` | `VALID_CURRENCIES` (`HNL`, `USD`), `isValidCurrency` | Validar monedas |
-| `utils/redact.ts` | `redactSensitive`, `REDACTED`: enmascara contraseñas, tokens, cuentas, tarjetas… | Cualquier log propio de un payload |
+| `utils/redact.ts` | `redactSensitive`, `REDACTED`: enmascara contraseñas, tokens, cuentas, tarjetas…; `redactUrl`: enmascara el token del link de una cita en rutas (`/links/<token>`, `/access-links/<token>`). Lo usan el log de peticiones, los filtros de excepciones y `BaseServiceClient` | Cualquier log propio de un payload o de una URL |
 
 ### Entidades base y nombres de tabla (`database/entities/`)
 

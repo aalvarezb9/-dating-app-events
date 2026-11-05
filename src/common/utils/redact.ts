@@ -72,3 +72,14 @@ const redact = (value: unknown, depth: number, seen: WeakSet<object>): unknown =
 export function redactSensitive(value: unknown): unknown {
   return redact(value, 0, new WeakSet());
 }
+
+/** The secret of the link of an appointment travels in the path: `/links/<token>` and `/access-links/<token>` */
+const LINK_TOKEN_IN_PATH = /\/((?:access-)?links)\/[^/?#\s]+/g;
+
+/**
+ * Returns the URL (or path) with the secrets that travel in the path masked, so it can be logged.
+ * Today that is the token of the link of an appointment.
+ */
+export function redactUrl(url: string): string {
+  return typeof url === 'string' ? url.replace(LINK_TOKEN_IN_PATH, `/$1/${REDACTED}`) : url;
+}

@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { redactUrl } from '../utils/redact';
 
 /**
  * Global exception filter to catch ALL exceptions
@@ -50,7 +51,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       // Log full stack trace for non-HTTP errors
       this.logger.error(
-        `Unhandled Exception: ${request.method} ${request.url}`,
+        `Unhandled Exception: ${request.method} ${redactUrl(request.url)}`,
         exception.stack,
       );
     }
@@ -61,7 +62,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       errorName = 'UnknownError';
 
       this.logger.error(
-        `Unknown Exception: ${request.method} ${request.url} - ${JSON.stringify(exception)}`,
+        `Unknown Exception: ${request.method} ${redactUrl(request.url)} -${JSON.stringify(exception)}`,
       );
     }
 
