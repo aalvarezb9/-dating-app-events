@@ -67,6 +67,9 @@ export * from './outbox';
 // Projections (local read copies of other services' data) and snapshots
 export * from './projections';
 
+// Safe uploads (type by content, size, server-generated names)
+export * from './files';
+
 // Encryption
 export * from './encryption/encryption.service';
 export * from './encryption/encryption.module';

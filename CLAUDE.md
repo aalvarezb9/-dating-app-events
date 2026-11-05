@@ -39,6 +39,7 @@ npm test          # jest
 |---|---|---|
 | Leer una variable de entorno | `SharedConfigService` | `config/env.config.ts` |
 | Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
+| Recibir un archivo que sube el cliente (comprobante, imagen) | `assertValidUpload` + `SINGLE_FILE_UPLOAD_OPTIONS` (tipo por contenido, tope de tamaño), luego `FileStorageService` | `files/` |
 | Publicar un evento sin que se pierda aunque Kafka falle | `OutboxService.enqueue(manager, evento)` (misma transacción que el cambio) | `outbox/` |
 | Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
 | Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
@@ -187,6 +188,8 @@ Eventos nuevos en `DomainEventType`: `SERVICE_UPSERTED/DELETED`, `TEAM_MEMBER_UP
 |---|---|---|
 | `encryption/encryption.service.ts` | `EncryptionService.encrypt/decrypt`: AES-256-GCM, clave derivada con scrypt y sal aleatoria (`v2:`), lee el formato antiguo | Datos sensibles en BD (cuentas bancarias). Requiere `ENCRYPTION_KEY` ≥ 32 caracteres |
 | `encryption/encryption.module.ts` | `EncryptionModule` | Importarlo donde se cifra |
+| `files/file-upload.ts` | Subidas seguras: `SINGLE_FILE_UPLOAD_OPTIONS` (multer corta lo que pase de 5 MB mientras llega), `assertValidUpload(file, tiposPermitidos)` (el tipo se detecta por los **bytes** del archivo, no por lo que dice el cliente; devuelve `{ mimeType, extension }`), `generateStorageFileName(ext)` (nombre generado por el servidor, nunca el del cliente) y los conjuntos `PAYMENT_PROOF_TYPES`, `HERO_IMAGE_TYPES`, `GALLERY_IMAGE_TYPES` | Cualquier endpoint que reciba un archivo (`@UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_OPTIONS))`); luego `FileStorageService.uploadFile` |
+| `files/file-upload.constants.ts` | `MAX_FILE_SIZE_BYTES` (5 MB) y `UPLOAD_ERRORS` (claves i18n `validation.error.file_required|file_size_exceeded|invalid_file_type`, iguales en todos los servicios) | Al traducir o probar los errores de una subida |
 | `http-client/base-service-client.ts` | `BaseServiceClient`: cliente Axios con API key, timeout y manejo de errores (`get/post/patch/put/delete`); un error HTTP del servicio remoto se relanza con su mismo estado (400/401/403/404/409 como excepciones de Nest) para que el llamador distinga un 404 de un fallo | Una clase por servicio remoto (`AuthServiceClient`) |
 | `http-client/http-client.module.ts` | `HttpClientModule` | Importarlo donde hay clientes HTTP |
 | `index.ts` | Reexporta lo público | Todo export nuevo pasa por aquí |
