@@ -114,13 +114,9 @@ export class AdvisoryLockManager {
     await queryRunner.connect();
 
     try {
-      // Start transaction with specified isolation level
-      if (options?.isolationLevel) {
-        await queryRunner.query(
-          `SET TRANSACTION ISOLATION LEVEL ${options.isolationLevel}`,
-        );
-      }
-      await queryRunner.startTransaction();
+      // The isolation level travels with BEGIN: a `SET TRANSACTION` sent before it runs outside any
+      // transaction block and PostgreSQL ignores it
+      await queryRunner.startTransaction(options?.isolationLevel);
 
       // Generate lock keys and sort them to prevent deadlocks
       const locks = lockParams
@@ -159,8 +155,13 @@ export class AdvisoryLockManager {
 
       return result;
     } catch (error: any) {
-      // Rollback on error (releases locks automatically)
-      await queryRunner.rollbackTransaction();
+      // Rollback on error (releases locks automatically). If the connection is gone the rollback fails
+      // too; the error the caller needs is the original one, not that
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch (rollbackError: any) {
+        this.logger.error(`Rollback failed after: ${error?.message} (${rollbackError?.message})`);
+      }
 
       if (options?.enableLogging) {
         this.logger.error(

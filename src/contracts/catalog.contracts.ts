@@ -22,8 +22,21 @@ export interface ProjectionPayload {
   sourceVersion: number;
 }
 
+/** A pause inside a working day ('HH:mm', business time zone): nothing can be booked across it */
+export interface DayBreakContract {
+  start: string;
+  end: string;
+}
+
 export interface WeeklyHoursContract {
-  [day: string]: { open: string; close: string; closed: boolean } | undefined;
+  [day: string]: { open: string; close: string; closed: boolean; breaks?: DayBreakContract[] } | undefined;
+}
+
+/** Days off (holidays, vacations): local dates 'YYYY-MM-DD' in the business time zone, both ends included */
+export interface DateRangeContract {
+  from: string;
+  to: string;
+  reason?: string | null;
 }
 
 /** SERVICE_UPSERTED / SERVICE_DELETED */
@@ -44,15 +57,21 @@ export interface ServiceContract extends ProjectionPayload {
 
 /** TEAM_MEMBER_UPSERTED / TEAM_MEMBER_DELETED */
 export interface TeamMemberContract extends ProjectionPayload {
-  /** Login account of the member (internal consumers only: staff scope) */
-  userId: string;
+  /**
+   * Login account of the member. Team members are the people who attend customers and have NO login,
+   * except the owner when they attend too (then it is the owner's user id); null otherwise.
+   */
+  userId: string | null;
   displayName: string;
   title: string | null;
   bio: string | null;
   profilePhotoUrl: string | null;
   specialties: string[] | null;
   isAvailable: boolean;
+  /** Days and hours the member works ('closed' = does not work that day); null = follows the business hours */
   workingHours: WeeklyHoursContract | null;
+  /** Days the member is away (vacations, leave); optional so older publishers keep working */
+  timeOff?: DateRangeContract[] | null;
   /** Services the member offers; empty/null = offers every service */
   serviceIds: string[] | null;
   ratingAvg: number;
@@ -70,6 +89,8 @@ export interface BusinessProfileContract extends ProjectionPayload {
   /** IANA time zone in which business hours and service windows are read; null = platform default */
   timezone: string | null;
   businessHours: WeeklyHoursContract | null;
+  /** Days the whole business is closed (holidays, vacations); optional so older publishers keep working */
+  closures?: DateRangeContract[] | null;
   cancellationRules: { hoursBefore: number; refundPercentage: number; rescheduleAllowed: boolean } | null;
   logoUrl: string | null;
   coverImageUrl: string | null;

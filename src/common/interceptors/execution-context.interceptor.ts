@@ -78,7 +78,8 @@ export class ExecutionContextInterceptor implements NestInterceptor {
       tenantId: user?.tenantId || request.tenantId,
       userId: user?.id || user?.userId,
       userEmail: user?.email,
-      userRoles: user?.roles,
+      // The JWT strategy gives a single `role`; `roles` is kept for strategies that give a list
+      userRoles: user?.roles ?? (user?.role ? [user.role] : undefined),
       isPublic: isPublic || false,
       isCrossTenant: isCrossTenant || false,
       includeDeleted: includeDeleted || false,

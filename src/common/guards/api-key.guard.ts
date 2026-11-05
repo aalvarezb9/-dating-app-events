@@ -1,5 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { timingSafeEqual } from 'crypto';
 import { SharedConfigService } from '../../config/env.config';
 
 /**
@@ -57,7 +58,10 @@ export class ApiKeyGuard implements CanActivate {
       throw new Error('INTER_SERVICE_API_KEY is not configured');
     }
 
-    if (!apiKey || apiKey !== validApiKey) {
+    // Constant-time comparison, like InternalApiKeyGuard: the time taken must not reveal how much matched
+    const received = Buffer.from(typeof apiKey === 'string' ? apiKey : '');
+    const expected = Buffer.from(validApiKey);
+    if (!apiKey || received.length !== expected.length || !timingSafeEqual(received, expected)) {
       throw new UnauthorizedException('Invalid or missing API Key');
     }
 

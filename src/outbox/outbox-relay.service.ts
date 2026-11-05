@@ -128,7 +128,12 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
           this.logger.warn(
             `Outbox event ${row.eventType} (${row.eventId}) not delivered (attempt ${attempts}/${this.options.maxAttempts}): ${error?.message}`,
           );
-          if (!parked) {
+          if (parked) {
+            // Nobody retries a parked event: this is the line an alert must be built on
+            this.logger.error(
+              `Outbox event ${row.eventType} (${row.eventId}) PARKED as failed after ${attempts} attempts and will not be retried: ${error?.message}`,
+            );
+          } else {
             break; // keep the order: retry this event before sending newer ones
           }
         }

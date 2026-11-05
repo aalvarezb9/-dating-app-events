@@ -268,6 +268,22 @@ export class SupabaseAuthStrategy extends AuthService {
     }
   }
 
+  async updatePassword(userId: string, newPassword: string): Promise<void> {
+    try {
+      const { error } = await this.supabase.auth.admin.updateUserById(userId, { password: newPassword });
+
+      if (error) {
+        this.logger.error(`Update password failed: ${error?.message}`);
+        throw new BadRequestException(`Failed to update password: ${error?.message}`);
+      }
+
+      this.logger.log(`Password updated for user: ${userId}`);
+    } catch (error: any) {
+      this.logger.error(`Update password error: ${error?.message}`);
+      throw error;
+    }
+  }
+
   async deleteUser(userId: string): Promise<void> {
     try {
       const { error } = await this.supabase.auth.admin.deleteUser(userId);

@@ -133,6 +133,15 @@ export abstract class AuthService {
   abstract sendPasswordResetEmail(email: string): Promise<void>;
 
   /**
+   * Set a new password for a user (admin operation: the caller has already proven who the user is,
+   * e.g. by checking the current password)
+   *
+   * @param userId - User ID
+   * @param newPassword - The new password
+   */
+  abstract updatePassword(userId: string, newPassword: string): Promise<void>;
+
+  /**
    * Verify user's email (admin operation)
    *
    * @param userId - User ID

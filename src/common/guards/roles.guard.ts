@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { IS_INTERNAL_API_KEY } from '../decorators/internal-api.decorator';
 import { UserRole } from '../types/auth.types';
 
 @Injectable()
@@ -15,7 +16,13 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (isPublic) {
+    // Internal routes have no user: InternalApiKeyGuard (applied by @InternalApi()) is their barrier
+    const isInternal = this.reflector.getAllAndOverride<boolean>(IS_INTERNAL_API_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic || isInternal) {
       return true;
     }
 
@@ -25,9 +32,10 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    // If no roles are required, allow access (authenticated users only, checked by JwtAuthGuard)
+    // Fail closed: a private route that forgot its @Roles() is a mistake, and "any authenticated user"
+    // (a customer included) is the worst way to find out. Declare @Roles(...) or @Public().
     if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
+      throw new ForbiddenException('This route declares no roles');
     }
 
     // Check if user has required role
