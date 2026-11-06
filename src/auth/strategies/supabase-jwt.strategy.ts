@@ -1,8 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Cache } from 'cache-manager';
 import { SharedConfigService } from '../../config/env.config';
+import { tenantBlockedWith } from '../tenant-block';
 
 /** How long a successful "user still exists" check is reused */
 const USER_CHECK_TTL_MS = 60_000;
@@ -17,6 +19,8 @@ const USER_CHECK_CACHE_MAX_ENTRIES = 10_000;
  * Features:
  * - JWT validation using Supabase JWT secret
  * - User verification via Supabase Auth API
+ * - Tenant check: a token of a tenant that is not active any more (pending, suspended, rejected) is
+ *   refused with 403 even though it has not expired (see ../tenant-block.ts)
  * - Custom claims extraction (app_metadata)
  * - Integration with NestJS Guards
  *
@@ -48,7 +52,14 @@ const USER_CHECK_CACHE_MAX_ENTRIES = 10_000;
 export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jwt') {
   private supabase: SupabaseClient;
 
-  constructor(private config: SharedConfigService) {
+  /**
+   * @param cache the shared Redis cache that holds the block flags of the tenants. Without it the tenant
+   *              check is skipped (a service that does not import RedisCacheModule).
+   */
+  constructor(
+    private config: SharedConfigService,
+    private cache?: Cache,
+  ) {
     const supabaseConfig = config.supabase;
 
     super({
@@ -101,6 +112,7 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
    * @param payload - JWT payload from Supabase token
    * @returns Validated user object with custom claims
    * @throws UnauthorizedException if user is invalid
+   * @throws ForbiddenException if the tenant of the user is not active any more
    */
   async validate(payload: any) {
     // The signature is already verified; confirming with Supabase that the user still exists
@@ -108,11 +120,18 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
     // Trade-off: a user deleted in Supabase can keep acting for at most USER_CHECK_TTL_MS.
     await this.assertUserExists(payload.sub);
 
+    // Not cached in memory like the check above: a suspension must cut the sessions right away
+    const tenantId = payload.app_metadata?.tenantId;
+    const blockedWith = await tenantBlockedWith(this.cache, tenantId);
+    if (blockedWith) {
+      throw new ForbiddenException(`account.error.tenant_${blockedWith}`);
+    }
+
     // Extract user data and custom claims
     return {
       userId: payload.sub,
       email: payload.email,
-      tenantId: payload.app_metadata?.tenantId,
+      tenantId,
       tenantType: payload.app_metadata?.tenantType,
       role: payload.app_metadata?.role || payload.role, // Prefer custom role from app_metadata
     };

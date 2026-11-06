@@ -18,9 +18,16 @@ export interface OutboxOptions {
   maxAttempts?: number;
   /** Published rows older than this are deleted */
   retentionDays?: number;
+  /**
+   * Secrets that must not stay in the table: event type -> paths inside the event (e.g.
+   * `{ EMAIL_VERIFICATION_REQUESTED: ['data.token'] }`). A published (or parked) event has them replaced
+   * by `[redacted]` OUTBOX_REDACT_AFTER_SECONDS after it was written (required when this is used): long
+   * enough for a consumer in a hurry, short enough that the table is never a store of credentials.
+   */
+  redact?: Record<string, string[]>;
 }
 
-const DEFAULTS: Required<OutboxOptions> = {
+const DEFAULTS: Required<Omit<OutboxOptions, 'redact'>> = {
   enabled: true,
   pollIntervalMs: 1000,
   batchSize: 50,
@@ -28,7 +35,9 @@ const DEFAULTS: Required<OutboxOptions> = {
   retentionDays: 7,
 };
 
+export const OUTBOX_REDACTED = '[redacted]';
 const CLEANUP_EVERY_MS = 60 * 60 * 1000;
+const REDACT_EVERY_MS = 30 * 1000;
 
 /**
  * Publishes the outbox rows to Kafka, oldest first.
@@ -42,10 +51,12 @@ const CLEANUP_EVERY_MS = 60 * 60 * 1000;
 @Injectable()
 export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name);
-  private readonly options: Required<OutboxOptions>;
+  private readonly options: Required<Omit<OutboxOptions, 'redact'>> & Pick<OutboxOptions, 'redact'>;
+  private readonly redactAfterMs: number | null = null;
   private timer?: NodeJS.Timeout;
   private stopped = false;
   private lastCleanup = 0;
+  private lastRedaction = 0;
 
   constructor(
     private readonly dataSource: DataSource,
@@ -54,6 +65,14 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(OUTBOX_OPTIONS) options: OutboxOptions,
   ) {
     this.options = { ...DEFAULTS, ...options };
+
+    if (options.redact && Object.keys(options.redact).length > 0) {
+      const seconds = Number(config.get('OUTBOX_REDACT_AFTER_SECONDS'));
+      if (!Number.isFinite(seconds) || seconds <= 0) {
+        throw new Error('OUTBOX_REDACT_AFTER_SECONDS must be a positive number when the outbox redacts events');
+      }
+      this.redactAfterMs = seconds * 1000;
+    }
   }
 
   onApplicationBootstrap(): void {
@@ -77,6 +96,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
       let published = 0;
       try {
         published = await this.drain();
+        await this.redactIfDue();
         await this.cleanupIfDue();
       } catch (error: any) {
         this.logger.error(`Outbox relay failed: ${error?.message}`, error?.stack);
@@ -140,6 +160,51 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
       }
       return published;
     });
+  }
+
+  /**
+   * Blank the secrets of the events that were delivered (or parked: they will not be delivered by
+   * themselves) a while ago. Pending events keep them: they have not reached their consumer yet.
+   * @returns number of fields blanked
+   */
+  async redactNow(now: number = Date.now()): Promise<number> {
+    if (!this.options.redact || this.redactAfterMs === null) {
+      return 0;
+    }
+
+    const table = this.dataSource.getMetadata(OutboxEvent).tableName;
+    const cutoff = new Date(now - this.redactAfterMs);
+    let blanked = 0;
+
+    for (const [eventType, paths] of Object.entries(this.options.redact)) {
+      for (const path of paths) {
+        const keys = path.split('.');
+        const [, affected] = await this.dataSource.query(
+          `UPDATE "${table}"
+              SET payload = jsonb_set(payload, $3::text[], to_jsonb($4::text))
+            WHERE event_type = $1
+              AND status IN ('published', 'failed')
+              AND created_at < $2
+              AND payload #>> $3::text[] IS NOT NULL
+              AND payload #>> $3::text[] <> $4`,
+          [eventType, cutoff, keys, OUTBOX_REDACTED],
+        );
+        blanked += affected ?? 0;
+      }
+    }
+    return blanked;
+  }
+
+  private async redactIfDue(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastRedaction < REDACT_EVERY_MS) {
+      return;
+    }
+    this.lastRedaction = now;
+    const blanked = await this.redactNow(now);
+    if (blanked > 0) {
+      this.logger.log(`Redacted ${blanked} secret field(s) of delivered outbox events`);
+    }
   }
 
   private async cleanupIfDue(): Promise<void> {

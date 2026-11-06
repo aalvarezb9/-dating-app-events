@@ -1,5 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { AuthService } from './auth-service.interface';
 import { SupabaseAuthStrategy } from './strategies/supabase-auth.strategy';
@@ -42,12 +44,12 @@ import { SharedConfigService } from '../config/env.config';
   providers: [
     {
       provide: 'JWT_STRATEGY',
-      useFactory: (config: SharedConfigService) => {
+      useFactory: (config: SharedConfigService, cache?: Cache) => {
         const provider = config.get('AUTH_PROVIDER') || 'supabase';
 
         switch (provider) {
           case 'supabase':
-            return new SupabaseJwtStrategy(config);
+            return new SupabaseJwtStrategy(config, cache);
           // Future providers:
           // case 'cognito':
           //   return new CognitoJwtStrategy(config);
@@ -55,9 +57,14 @@ import { SharedConfigService } from '../config/env.config';
             throw new Error(`Unknown auth provider for JWT: ${provider}`);
         }
       },
-      inject: [SharedConfigService],
+      // The cache is optional: it holds the block flags of the tenants (RedisCacheModule, global)
+      inject: [SharedConfigService, { token: CACHE_MANAGER, optional: true }],
     },
-    SupabaseJwtStrategy, // Keep for backward compatibility
+    {
+      provide: SupabaseJwtStrategy, // Keep for backward compatibility
+      useFactory: (config: SharedConfigService, cache?: Cache) => new SupabaseJwtStrategy(config, cache),
+      inject: [SharedConfigService, { token: CACHE_MANAGER, optional: true }],
+    },
     {
       provide: AuthService,
       useFactory: (config: SharedConfigService) => {

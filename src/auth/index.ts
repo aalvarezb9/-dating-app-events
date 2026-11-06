@@ -15,5 +15,8 @@ export * from './auth-service.interface';
 export * from './strategies/supabase-auth.strategy';
 export * from './strategies/supabase-jwt.strategy';
 
+// Cut the sessions of a tenant that is not active
+export * from './tenant-block';
+
 // Module
 export * from './auth.module';

@@ -154,4 +154,13 @@ export abstract class AuthService {
    * @param userId - User ID
    */
   abstract deleteUser(userId: string): Promise<void>;
+
+  /**
+   * Ban or unban a user (admin operation). A banned user cannot log in nor get new tokens with a
+   * refresh token; tokens already issued keep working until they expire (see tenant-block.ts).
+   *
+   * @param userId - User ID
+   * @param banned - true to ban, false to lift the ban
+   */
+  abstract setUserBanned(userId: string, banned: boolean): Promise<void>;
 }

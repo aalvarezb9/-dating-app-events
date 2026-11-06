@@ -299,4 +299,25 @@ export class SupabaseAuthStrategy extends AuthService {
       throw error;
     }
   }
+
+  async setUserBanned(userId: string, banned: boolean): Promise<void> {
+    try {
+      const { error } = await this.supabase.auth.admin.updateUserById(userId, {
+        ban_duration: banned ? BAN_FOR_GOOD : 'none',
+      });
+
+      if (error) {
+        this.logger.error(`Ban user failed: ${error?.message}`);
+        throw new BadRequestException(`Failed to ${banned ? 'ban' : 'unban'} user: ${error?.message}`);
+      }
+
+      this.logger.log(`User ${banned ? 'banned' : 'unbanned'}: ${userId}`);
+    } catch (error: any) {
+      this.logger.error(`Ban user error: ${error?.message}`);
+      throw error;
+    }
+  }
 }
+
+/** GoTrue takes a duration; ~100 years is a ban until it is lifted */
+const BAN_FOR_GOOD = '876000h';

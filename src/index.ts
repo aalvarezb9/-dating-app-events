@@ -61,6 +61,9 @@ export * from './database/entities';
 // Contracts between services (events, projections, requests)
 export * from './contracts';
 
+// Rules of the agenda shared by the services that take and decide bookings (hours, breaks, closures, member agenda)
+export * from './scheduling';
+
 // Transactional outbox (reliable event publication)
 export * from './outbox';
 
