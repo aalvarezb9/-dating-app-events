@@ -1,7 +1,15 @@
-import { DateRangeContract, DayBreakContract, WeeklyHoursContract } from '../contracts/catalog.contracts';
-import { getLocalTimeParts, timeToMinutes } from './local-time';
+import { DateRangeContract, DayBreakContract } from '../contracts/catalog.contracts';
+import { DayOfWeek, getLocalTimeParts, timeToMinutes } from './local-time';
 
 const MINUTES_PER_DAY = 24 * 60;
+
+/**
+ * Hours per weekday, by shape: the contract (`WeeklyHoursContract`) and the types of each service's own
+ * entities both fit, whether they index by any string or name the seven days.
+ */
+export type WeeklyHoursInput = {
+  [day in DayOfWeek]?: { open: string; close: string; closed: boolean; breaks?: DayBreakContract[] } | undefined;
+};
 
 export interface AvailabilityCheck {
   /** Appointment start (instant) */
@@ -10,14 +18,14 @@ export interface AvailabilityCheck {
   /** Business IANA time zone, e.g. America/Tegucigalpa */
   timeZone: string;
   /** Business hours per weekday. null/undefined or a missing day => not configured, no restriction */
-  businessHours?: WeeklyHoursContract | null;
+  businessHours?: WeeklyHoursInput | null;
   /** Days the whole business is closed (holidays, vacations) */
   closures?: DateRangeContract[] | null;
   /** Service availability window ('HH:mm'). Both empty => the service is available all day */
   serviceStartTime?: string | null;
   serviceEndTime?: string | null;
   /** The person who attends: their own days, hours, breaks and leave. null/undefined => the business agenda */
-  member?: { workingHours?: WeeklyHoursContract | null; timeOff?: DateRangeContract[] | null } | null;
+  member?: { workingHours?: WeeklyHoursInput | null; timeOff?: DateRangeContract[] | null } | null;
 }
 
 /** Why an appointment does not fit; each service turns it into its own error key */
