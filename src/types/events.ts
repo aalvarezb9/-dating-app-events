@@ -8,6 +8,8 @@ export enum DomainEventType {
   USER_REGISTERED = 'USER_REGISTERED',
   USER_PROFILE_UPDATED = 'USER_PROFILE_UPDATED',
   USER_DELETED = 'USER_DELETED',
+  EMAIL_VERIFICATION_REQUESTED = 'EMAIL_VERIFICATION_REQUESTED', // Token to confirm an email, for the email to the person (see contracts/email-verification.contract.ts)
+  EMAIL_VERIFIED = 'EMAIL_VERIFIED', // The person proved the email is theirs
 
   // Business Events
   BUSINESS_REGISTERED = 'BUSINESS_REGISTERED',
@@ -34,7 +36,9 @@ export enum DomainEventType {
   APPOINTMENT_CONFIRMED = 'APPOINTMENT_CONFIRMED',
   APPOINTMENT_CANCELLED = 'APPOINTMENT_CANCELLED',
   APPOINTMENT_RESCHEDULED = 'APPOINTMENT_RESCHEDULED',
+  APPOINTMENT_STARTED = 'APPOINTMENT_STARTED', // The service began (status in_progress)
   APPOINTMENT_COMPLETED = 'APPOINTMENT_COMPLETED',
+  APPOINTMENT_NO_SHOW = 'APPOINTMENT_NO_SHOW', // The customer did not come
   APPOINTMENT_REMINDER = 'APPOINTMENT_REMINDER',
   APPOINTMENT_ACCESS_LINK_ISSUED = 'APPOINTMENT_ACCESS_LINK_ISSUED', // Link to see/move an appointment, for the email to the attendee
 
