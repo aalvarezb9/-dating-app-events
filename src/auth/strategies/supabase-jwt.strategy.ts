@@ -2,9 +2,8 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Cache } from 'cache-manager';
 import { SharedConfigService } from '../../config/env.config';
-import { tenantBlockedWith } from '../tenant-block';
+import { TenantBlockCache, tenantBlockedWith } from '../tenant-block';
 
 /** How long a successful "user still exists" check is reused */
 const USER_CHECK_TTL_MS = 60_000;
@@ -58,7 +57,7 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
    */
   constructor(
     private config: SharedConfigService,
-    private cache?: Cache,
+    private cache?: TenantBlockCache,
   ) {
     const supabaseConfig = config.supabase;
 

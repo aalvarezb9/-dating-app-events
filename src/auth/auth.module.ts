@@ -1,7 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { TenantBlockCache } from './tenant-block';
 import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { AuthService } from './auth-service.interface';
 import { SupabaseAuthStrategy } from './strategies/supabase-auth.strategy';
@@ -44,7 +44,7 @@ import { SharedConfigService } from '../config/env.config';
   providers: [
     {
       provide: 'JWT_STRATEGY',
-      useFactory: (config: SharedConfigService, cache?: Cache) => {
+      useFactory: (config: SharedConfigService, cache?: TenantBlockCache) => {
         const provider = config.get('AUTH_PROVIDER') || 'supabase';
 
         switch (provider) {
@@ -62,7 +62,7 @@ import { SharedConfigService } from '../config/env.config';
     },
     {
       provide: SupabaseJwtStrategy, // Keep for backward compatibility
-      useFactory: (config: SharedConfigService, cache?: Cache) => new SupabaseJwtStrategy(config, cache),
+      useFactory: (config: SharedConfigService, cache?: TenantBlockCache) => new SupabaseJwtStrategy(config, cache),
       inject: [SharedConfigService, { token: CACHE_MANAGER, optional: true }],
     },
     {
