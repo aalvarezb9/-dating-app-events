@@ -66,6 +66,14 @@ export enum DomainEventType {
   SUBSCRIPTION_CREATED = 'SUBSCRIPTION_CREATED',
   SUBSCRIPTION_RENEWED = 'SUBSCRIPTION_RENEWED',
   SUBSCRIPTION_CANCELLED = 'SUBSCRIPTION_CANCELLED',
+
+  // Notification commands (one topic per channel; see notifications/notification.contract.ts).
+  // They are ORDERS ("send this"), not facts: the emitter decides the content, notifications delivers it.
+  NOTIFICATION_EMAIL = 'NOTIFICATION_EMAIL',
+  NOTIFICATION_PUSH = 'NOTIFICATION_PUSH',
+  NOTIFICATION_UI = 'NOTIFICATION_UI',
+  NOTIFICATION_SSE = 'NOTIFICATION_SSE',
+  NOTIFICATION_ALL = 'NOTIFICATION_ALL',
 }
 
 /**

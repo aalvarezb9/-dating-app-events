@@ -73,6 +73,9 @@ export * from './projections';
 // Safe uploads (type by content, size, server-generated names)
 export * from './files';
 
+// Notification commands (emit an email / push / in-app / SSE order; delivered by backend-dating-notifications)
+export * from './notifications';
+
 // Encryption
 export * from './encryption/encryption.service';
 export * from './encryption/encryption.module';
