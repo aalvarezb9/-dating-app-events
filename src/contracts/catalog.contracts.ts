@@ -53,6 +53,12 @@ export interface ServiceContract extends ProjectionPayload {
   /** Optional daily availability window ('HH:mm', business time zone) */
   startTime: string | null;
   endTime: string | null;
+  /**
+   * Seats per session: how many customers can book the same start of this service (a yoga class, a
+   * workshop). 1 = a normal service, one customer per slot. Optional so older publishers keep working:
+   * a copy without it means 1.
+   */
+  capacity?: number;
 }
 
 /** TEAM_MEMBER_UPSERTED / TEAM_MEMBER_DELETED */
