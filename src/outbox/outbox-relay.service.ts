@@ -4,6 +4,7 @@ import { EventPublisher } from '../services/event-publisher.service';
 import { AdvisoryLockManager } from '../database/advisory-lock-manager';
 import { SharedConfigService } from '../config/env.config';
 import { OutboxEvent } from './outbox-event.entity';
+import { ensureTopicRetention } from './sensitive-topics';
 
 export const OUTBOX_OPTIONS = Symbol('OUTBOX_OPTIONS');
 
@@ -23,6 +24,8 @@ export interface OutboxOptions {
    * `{ EMAIL_VERIFICATION_REQUESTED: ['data.token'] }`). A published (or parked) event has them replaced
    * by `[redacted]` OUTBOX_REDACT_AFTER_SECONDS after it was written (required when this is used): long
    * enough for a consumer in a hurry, short enough that the table is never a store of credentials.
+   * The Kafka topic of those events keeps its messages SENSITIVE_TOPIC_RETENTION_HOURS only (required too):
+   * the secret must not outlive that in the broker either (see sensitive-topics.ts).
    */
   redact?: Record<string, string[]>;
 }
@@ -53,6 +56,9 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name);
   private readonly options: Required<Omit<OutboxOptions, 'redact'>> & Pick<OutboxOptions, 'redact'>;
   private readonly redactAfterMs: number | null = null;
+  private readonly topicRetentionHours: number | null = null;
+  private topicsProtected = false;
+  private lastTopicAttempt = 0;
   private timer?: NodeJS.Timeout;
   private stopped = false;
   private lastCleanup = 0;
@@ -72,12 +78,38 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
         throw new Error('OUTBOX_REDACT_AFTER_SECONDS must be a positive number when the outbox redacts events');
       }
       this.redactAfterMs = seconds * 1000;
+
+      const hours = Number(config.get('SENSITIVE_TOPIC_RETENTION_HOURS'));
+      if (!Number.isFinite(hours) || hours <= 0) {
+        throw new Error('SENSITIVE_TOPIC_RETENTION_HOURS must be a positive number when the outbox redacts events');
+      }
+      this.topicRetentionHours = hours;
     }
   }
 
   onApplicationBootstrap(): void {
     if (this.options.enabled) {
+      void this.protectSensitiveTopics(); // not awaited: a broker that is slow to answer must not delay the start
       this.schedule(0);
+    }
+  }
+
+  /**
+   * The topics of the events that carry a secret keep their messages for a short time only. A failure
+   * (broker down) is logged and tried again every few minutes: the settings apply to messages already written.
+   */
+  private async protectSensitiveTopics(): Promise<void> {
+    if (!this.options.redact || this.topicRetentionHours === null || this.topicsProtected) {
+      return;
+    }
+    this.lastTopicAttempt = Date.now();
+    try {
+      const kafka = this.config.kafka;
+      await ensureTopicRetention(kafka.brokers, kafka.clientId, Object.keys(this.options.redact), this.topicRetentionHours);
+      this.topicsProtected = true;
+      this.logger.log(`Topics ${Object.keys(this.options.redact).join(', ')} keep their messages ${this.topicRetentionHours} h`);
+    } catch (error: any) {
+      this.logger.error(`Could not limit the retention of the topics with secrets (will retry): ${error?.message}`);
     }
   }
 
@@ -197,6 +229,9 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
 
   private async redactIfDue(): Promise<void> {
     const now = Date.now();
+    if (!this.topicsProtected && now - this.lastTopicAttempt > 5 * 60 * 1000) {
+      void this.protectSensitiveTopics();
+    }
     if (now - this.lastRedaction < REDACT_EVERY_MS) {
       return;
     }
