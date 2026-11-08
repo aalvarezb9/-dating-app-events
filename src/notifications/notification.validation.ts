@@ -97,6 +97,10 @@ export function validateNotificationMessage(message: unknown): string[] {
       if (raw.title !== undefined && !isText(raw.title, MAX_SUBJECT_LENGTH)) errors.push('raw.title is not valid');
       if (raw.html !== undefined && !isText(raw.html, MAX_BODY_LENGTH)) errors.push('raw.html is not valid');
       if (m.channel === NotificationChannel.EMAIL && !isText(raw.subject, MAX_SUBJECT_LENGTH)) errors.push('raw.subject is required for email');
+      // ALL reaches every channel the person can be reached by, and each one needs its own part
+      if (m.channel === NotificationChannel.ALL && (!isText(raw.subject, MAX_SUBJECT_LENGTH) || !isText(raw.title, MAX_SUBJECT_LENGTH))) {
+        errors.push('raw.subject and raw.title are required for ALL');
+      }
       if ([NotificationChannel.PUSH, NotificationChannel.UI, NotificationChannel.SSE].includes(m.channel as NotificationChannel) && !isText(raw.title, MAX_SUBJECT_LENGTH)) {
         errors.push('raw.title is required for push, UI and SSE');
       }
