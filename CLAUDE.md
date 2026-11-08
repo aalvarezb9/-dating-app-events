@@ -40,6 +40,7 @@ npm test          # jest
 | Leer una variable de entorno | `SharedConfigService` | `config/env.config.ts` |
 | Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
 | Recibir un archivo que sube el cliente (comprobante, imagen) | `assertValidUpload` + `SINGLE_FILE_UPLOAD_OPTIONS` (tipo por contenido, tope de tamaño), luego `FileStorageService` | `files/` |
+| Avisar a una persona (email, push, bandeja, SSE) | `NotificationClient.emit(canal, { recipient, template \| raw, category })` (comando por Kafka, después del commit, nunca lanza) | `notifications/` |
 | Publicar un evento sin que se pierda aunque Kafka falle | `OutboxService.enqueue(manager, evento)` (misma transacción que el cambio) | `outbox/` |
 | Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
 | Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
@@ -188,6 +189,20 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | `services/event-publisher.service.ts` | Nuevo `publishEventOrThrow`: como `publishEvent` pero **lanza** si Kafka no lo entregó | Lo usa el relevo del outbox; el resto sigue con `publishEvent` (fire-and-forget) |
 
 Eventos nuevos en `DomainEventType`: `SERVICE_UPSERTED/DELETED`, `TEAM_MEMBER_UPSERTED/DELETED`, `BUSINESS_PROFILE_UPSERTED`, `LANDING_PAGE_UPSERTED`, `REVIEW_UPSERTED`, `APPOINTMENT_REQUEST_CREATED`, `APPOINTMENT_REQUEST_REJECTED` (los dos últimos antes se usaban como strings). `BUSINESS_PROFILE_UPDATED` queda como legado. También: `EMAIL_VERIFICATION_REQUESTED`/`EMAIL_VERIFIED` (auth) y `APPOINTMENT_STARTED`/`APPOINTMENT_NO_SHOW` (schedule, al pasar la cita a `in_progress`/`no_show`; mismo payload que `APPOINTMENT_CONFIRMED`).
+
+### Notificaciones (`notifications/`)
+
+Los servicios **ordenan** una notificación con un comando por Kafka; `backend-dating-notifications` la entrega. Es un comando ("manda esto"), no un evento de dominio (un hecho): se publica **además** del evento, sin outbox y fire-and-forget.
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `notification.contract.ts` | `NotificationChannel` (`EMAIL`, `PUSH`, `UI`, `SSE`, `ALL`), `NOTIFICATION_TOPICS` (un topic por canal = un `DomainEventType.NOTIFICATION_*`), `NotificationMessage` (id, canal, destinatario, **`template` o `raw`**, adjuntos por referencia, categoría, `sensitiveFields`), `DELIVERY_CHANNELS` | Emitir o consumir un comando de notificación |
+| `notification.validation.ts` | `validateNotificationMessage(msg): string[]` (función pura: qué exige cada canal del destinatario, un solo contenido, adjuntos solo en email…), `canReach(recipient, canal)`, `channelsFor(msg)` (a qué canales llega un `ALL`) | El emisor la ejecuta antes de publicar y el servicio al consumir: nada de Kafka se da por bueno |
+| `notification-templates.ts` | `NotificationTemplateCatalog`: las plantillas que se pueden pedir y los datos tipados de cada una; `TypedTemplate`; `NOTIFICATION_TEMPLATE_KEYS` | Pedir una plantilla (no compila sin sus datos). **Una plantilla nueva se añade aquí y como archivo en notifications** |
+| `notification.client.ts` | `NotificationClient.emit(canal, input)` (nunca lanza) / `emitOrThrow` (para tests); `buildNotificationMessage`; `notificationEvent` y `notificationPartitionKey` (el evento de Kafka de un mensaje) | Pedir una notificación. **Llámalo después del commit**, nunca dentro de la transacción |
+| `notifications.module.ts` | `NotificationsModule` (global): provee `NotificationClient` (necesita `EventsModule` y `SharedConfigModule`) | Importarlo en el `AppModule` del servicio que notifica |
+
+El contrato se prueba desde `backend-dating-notifications/src/contract` (la librería no tiene tests propios).
 
 ### Otros módulos
 
