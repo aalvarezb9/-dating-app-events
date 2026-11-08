@@ -74,6 +74,18 @@ export interface NotificationTemplateCatalog {
     timezone: string;
     link?: string;
   };
+
+  /** The platform approved the business: its owner can sign in (auth, `BUSINESS_REQUEST_APPROVED`) */
+  BUSINESS_APPROVED: { ownerName?: string; businessName?: string };
+
+  /** The platform rejected the business; `reason` is what the owner is told */
+  BUSINESS_REJECTED: { ownerName?: string; businessName?: string; reason?: string };
+
+  /** The business was suspended: its sessions were closed */
+  BUSINESS_SUSPENDED: { ownerName?: string; businessName?: string; reason?: string };
+
+  /** A suspended business is active again */
+  BUSINESS_REACTIVATED: { ownerName?: string; businessName?: string };
 }
 
 export type NotificationTemplateKey = keyof NotificationTemplateCatalog;
@@ -92,4 +104,8 @@ export const NOTIFICATION_TEMPLATE_KEYS: readonly NotificationTemplateKey[] = [
   'APPOINTMENT_RESCHEDULED',
   'APPOINTMENT_REMINDER',
   'PAYMENT_PROOF_REJECTED',
+  'BUSINESS_APPROVED',
+  'BUSINESS_REJECTED',
+  'BUSINESS_SUSPENDED',
+  'BUSINESS_REACTIVATED',
 ];
