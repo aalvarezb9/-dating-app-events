@@ -26,7 +26,8 @@ const isText = (value: unknown, max = Infinity): value is string => typeof value
 export function canReach(recipient: NotificationRecipient, channel: DeliveryChannel): boolean {
   switch (channel) {
     case NotificationChannel.EMAIL:
-      return typeof recipient.email === 'string' && EMAIL_PATTERN.test(recipient.email);
+      // A guest gives the address; an account can give only its id and the service asks auth for the address
+      return (typeof recipient.email === 'string' && EMAIL_PATTERN.test(recipient.email)) || Boolean(recipient.userId);
     case NotificationChannel.PUSH:
       return Boolean(recipient.userId) || (recipient.deviceTokens?.length ?? 0) > 0;
     case NotificationChannel.UI:
@@ -148,7 +149,7 @@ export function validateNotificationMessage(message: unknown): string[] {
 function neededFor(channel: DeliveryChannel): string {
   switch (channel) {
     case NotificationChannel.EMAIL:
-      return 'recipient.email is required';
+      return 'recipient.email or recipient.userId is required';
     case NotificationChannel.PUSH:
       return 'recipient.userId or recipient.deviceTokens is required';
     default:
