@@ -85,20 +85,28 @@ export class NotificationClient {
       throw new Error(`invalid notification: ${problems.join('; ')}`);
     }
 
-    const event: DomainEvent = {
-      eventType: NOTIFICATION_TOPICS[channel],
-      eventId: message.id,
-      aggregateId: message.id,
-      aggregateType: 'Notification',
-      tenantId: message.recipient.tenantId,
-      userId: message.recipient.userId,
-      timestamp: new Date(),
-      version: 1,
-      data: message as unknown as Record<string, unknown>,
-      metadata: { source: message.source, correlationId: message.correlationId },
-    };
-    // The same recipient always lands in the same partition: its notifications are delivered in order
-    await this.publisher.publishEventOrThrow(event, message.recipient.userId ?? message.recipient.email ?? message.id);
+    await this.publisher.publishEventOrThrow(notificationEvent(message), notificationPartitionKey(message));
     return message;
   }
+}
+
+/** The Kafka event that carries a notification command (the topic is the event type: one per channel) */
+export function notificationEvent(message: NotificationMessage): DomainEvent {
+  return {
+    eventType: NOTIFICATION_TOPICS[message.channel],
+    eventId: message.id,
+    aggregateId: message.id,
+    aggregateType: 'Notification',
+    tenantId: message.recipient.tenantId,
+    userId: message.recipient.userId,
+    timestamp: new Date(),
+    version: 1,
+    data: message as unknown as Record<string, unknown>,
+    metadata: { source: message.source, correlationId: message.correlationId },
+  };
+}
+
+/** The same recipient always lands in the same partition: its notifications are delivered in order */
+export function notificationPartitionKey(message: NotificationMessage): string {
+  return message.recipient.userId ?? message.recipient.email ?? message.id;
 }
