@@ -38,6 +38,7 @@
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
     "express": "^4.0.0 || ^5.0.0",
+    "ioredis": "^5.0.0",
     "kafkajs": "^2.2.4",
     "keyv": "^5.0.0",
     "passport-jwt": "^4.0.0",
@@ -80,6 +81,7 @@
     "cache-manager": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "ioredis": "^5.11.1",
     "passport-jwt": "^4.0.0",
     "typeorm": "^0.3.30",
     "typescript": "^5.9.3"

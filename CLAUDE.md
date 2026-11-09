@@ -41,6 +41,7 @@ npm test          # jest
 | Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
 | Recibir un archivo que sube el cliente (comprobante, imagen) | `assertValidUpload` + `SINGLE_FILE_UPLOAD_OPTIONS` (tipo por contenido, tope de tamaño), luego `FileStorageService` | `files/` |
 | Avisar a una persona (email, push, bandeja, SSE) | `NotificationClient.emit(canal, { recipient, template \| raw, category })` (comando por Kafka, después del commit, nunca lanza) | `notifications/` |
+| Avisar a la UI en tiempo real de un cambio (un hueco de la agenda se ocupó) | `RealtimeClient.emit(topic, señal)` / `agendaTopics(...)` (Redis pub/sub → SSE; sin persistencia; después del commit, nunca lanza) | `realtime/` |
 | Publicar un evento sin que se pierda aunque Kafka falle | `OutboxService.enqueue(manager, evento)` (misma transacción que el cambio) | `outbox/` |
 | Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
 | Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
@@ -203,6 +204,18 @@ Los servicios **ordenan** una notificación con un comando por Kafka; `backend-d
 | `notifications.module.ts` | `NotificationsModule` (global): provee `NotificationClient` (necesita `EventsModule` y `SharedConfigModule`) | Importarlo en el `AppModule` del servicio que notifica |
 
 El contrato se prueba desde `backend-dating-notifications/src/contract` (la librería no tiene tests propios).
+
+### Tiempo real para la UI (`realtime/`)
+
+Señales **efímeras** que la UI recibe por SSE para refrescar lo que está mostrando (un calendario, una lista) cuando otra persona cambia algo. No es una notificación a alguien ni se guarda: si nadie escuchaba, se pierde y la UI ve la verdad la próxima vez que consulta la API. Las conexiones abiertas las mantiene `backend-dating-notifications` (hub); aquí solo está lo que comparten quien emite y el hub.
+
+| Archivo | Qué hace | Úsalo cuando |
+|---|---|---|
+| `realtime.topics.ts` | Nombres jerárquicos con puntos (`agenda.<subdominio>.<miembro\|no-team>.<YYYY-MM-DD>`): `validateTopic`, `validatePattern` (`*` = un segmento, `#` = el resto, solo al final), `topicMatches`, `isPublicAgendaPattern` (un patrón público de agenda **debe nombrar el negocio**: `agenda.*` y `agenda.#` serían un chorro de todos), `agendaTopic`, `agendaTopics({ subdomain, memberId, startsAt, endsAt, timeZone })` (un topic por día local que toca la cita), el tipo `AgendaSignal` | Emitir (nombrar bien) o suscribir (validar) |
+| `realtime.client.ts` | `RealtimeClient.emit(topic, datos)` / `emitMany(topics, datos)`: publica en el canal Redis `realtime:events`. Nunca lanza, no espera a Redis (sin cola offline), valida el nombre y limita la señal a 2 KB; avisa una sola vez por caída | Cambió algo que alguien puede estar mirando. **Después del commit** |
+| `realtime.module.ts` | `RealtimeModule` (global): provee `RealtimeClient` (necesita `SharedConfigModule`; requiere `ioredis` en el servicio) | Importarlo en el `AppModule` del servicio que emite |
+
+**La señal es una pista, no un dato**: `{ type, memberId, startsAt, endsAt }`, sin clientes ni ids de citas. La UI la recibe y vuelve a consultar la API, que decide qué puede ver cada quien. El contrato se prueba desde `backend-dating-notifications/src/contract`.
 
 ### Otros módulos
 
