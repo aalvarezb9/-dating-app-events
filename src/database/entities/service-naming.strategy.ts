@@ -1,12 +1,9 @@
 import { DefaultNamingStrategy, NamingStrategyInterface } from 'typeorm';
 import { snakeCase } from 'typeorm/util/StringUtils';
+import { isValidServiceNamespace } from '../../config/service-namespace';
 
-/** SERVICE_NAMESPACE: short lowercase abbreviation of the service (bo, sch, usr…) */
-const SERVICE_NAMESPACE_PATTERN = /^[a-z][a-z0-9]{1,5}$/;
-
-export function isValidServiceNamespace(namespace: string | undefined): namespace is string {
-  return !!namespace && SERVICE_NAMESPACE_PATTERN.test(namespace);
-}
+// Re-exported: it used to be defined here
+export { isValidServiceNamespace };
 
 /**
  * TypeORM naming strategy of the platform:

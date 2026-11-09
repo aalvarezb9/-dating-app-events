@@ -1,4 +1,4 @@
-import { isValidServiceNamespace } from '../database/entities/service-naming.strategy';
+import { isValidServiceNamespace } from './service-namespace';
 import { Injectable } from '@nestjs/common';
 import { ConfigService as NestConfigService } from '@nestjs/config';
 

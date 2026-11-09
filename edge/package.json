@@ -1,0 +1,6 @@
+{
+  "name": "@dating-app/events-edge",
+  "private": true,
+  "main": "../dist/edge.js",
+  "types": "../dist/edge.d.ts"
+}

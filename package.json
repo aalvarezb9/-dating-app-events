@@ -19,7 +19,8 @@
     "railway"
   ],
   "files": [
-    "dist"
+    "dist",
+    "edge"
   ],
   "author": "Dating App Team",
   "license": "MIT",
