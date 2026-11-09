@@ -24,5 +24,8 @@ export * from './admin-session';
 // Sessions in which a super administrator acts as another person to give them support
 export * from './support-session';
 
+// Feature flags the administration publishes and any service reads
+export * from './feature-flags';
+
 // Module
 export * from './auth.module';
