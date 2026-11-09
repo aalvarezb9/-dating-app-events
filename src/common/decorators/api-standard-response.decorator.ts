@@ -21,12 +21,41 @@ export function ApiStandardResponse<TModel extends Type<any>>(
     description?: string;
     isArray?: boolean;
     isPaginated?: boolean;
+    /** A page read by cursor (`CursorPage`): `meta` is `{ limit, hasMore, nextCursor }`, with no total */
+    isCursorPaginated?: boolean;
   },
 ) {
   const status = options?.status ?? 200;
   const description = options?.description ?? 'Success';
   const isArray = options?.isArray ?? false;
   const isPaginated = options?.isPaginated ?? false;
+  const isCursorPaginated = options?.isCursorPaginated ?? false;
+
+  // Schema for a page read by cursor
+  const cursorSchema = {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean', example: true },
+      data: {
+        type: 'object',
+        properties: {
+          data: {
+            type: 'array',
+            items: { $ref: getSchemaPath(dataDto) },
+          },
+          meta: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', example: 10 },
+              hasMore: { type: 'boolean', example: true },
+              nextCursor: { type: 'string', nullable: true, description: 'Send it as `cursor` to get the next page' },
+            },
+          },
+        },
+      },
+      timestamp: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+    },
+  };
 
   // Schema for paginated response
   const paginatedSchema = {
@@ -83,7 +112,7 @@ export function ApiStandardResponse<TModel extends Type<any>>(
   };
 
   // Select appropriate schema
-  const schema = isPaginated ? paginatedSchema : isArray ? arraySchema : singleSchema;
+  const schema = isCursorPaginated ? cursorSchema : isPaginated ? paginatedSchema : isArray ? arraySchema : singleSchema;
 
   return applyDecorators(
     ApiExtraModels(dataDto),
