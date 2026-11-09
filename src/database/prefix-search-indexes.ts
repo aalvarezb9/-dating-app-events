@@ -1,4 +1,4 @@
-import { Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DataSource, EntityTarget } from 'typeorm';
 
 /** A column that is searched by the start of its text */
@@ -30,6 +30,8 @@ const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
  * }
  * ```
  */
+// @Injectable() on the base is what makes Nest inject the DataSource into the subclasses (they declare no constructor)
+@Injectable()
 export abstract class PrefixSearchIndexes implements OnModuleInit {
   protected readonly logger = new Logger(this.constructor.name);
 
