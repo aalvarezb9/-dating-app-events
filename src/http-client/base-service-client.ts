@@ -12,6 +12,7 @@ import { HttpService } from '@nestjs/axios';
 import { AxiosError, AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { redactUrl } from '../common/utils/redact';
+import { outgoingTraceHeaders } from '../common/utils/request-trace';
 
 export interface HttpRequestOptions {
   headers?: Record<string, string>;
@@ -103,6 +104,8 @@ export abstract class BaseServiceClient {
       'Content-Type': 'application/json',
       'X-API-Key': this.apiKey,
       'X-Service-Name': this.serviceName,
+      // The id and the trace of the request being handled, so the next service logs the same ones
+      ...outgoingTraceHeaders(),
       ...customHeaders,
     };
   }

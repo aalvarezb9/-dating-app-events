@@ -11,6 +11,7 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { INCLUDE_DELETED_KEY } from '../decorators/include-deleted.decorator';
 import { CROSS_TENANT_KEY } from '../decorators/cross-tenant.decorator';
 import { randomUUID } from 'crypto';
+import { readRequestId, readTraceparent } from '../utils/request-trace';
 
 /**
  * Execution Context Interceptor
@@ -74,7 +75,9 @@ export class ExecutionContextInterceptor implements NestInterceptor {
 
     // Build context data from request
     const contextData = {
-      requestId: request.id || randomUUID(),
+      // The gateway's id first (so one id follows the request through every service), then Express's, then a new one
+      requestId: readRequestId(request.headers) || request.id || randomUUID(),
+      traceparent: readTraceparent(request.headers),
       tenantId: user?.tenantId || request.tenantId,
       userId: user?.id || user?.userId,
       userEmail: user?.email,

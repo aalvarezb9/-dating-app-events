@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { redactUrl } from '../utils/redact';
+import { readRequestId } from '../utils/request-trace';
 
 /**
  * Global exception filter to catch ALL exceptions
@@ -25,6 +26,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status: number;
     let message: string | string[];
     let errorName: string;
+    const requestId = readRequestId(request.headers) ?? '-';
 
     // Handle HTTP exceptions
     if (exception instanceof HttpException) {
@@ -51,7 +53,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       // Log full stack trace for non-HTTP errors
       this.logger.error(
-        `Unhandled Exception: ${request.method} ${redactUrl(request.url)}`,
+        `[${requestId}] Unhandled Exception: ${request.method} ${redactUrl(request.url)}`,
         exception.stack,
       );
     }
@@ -62,17 +64,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       errorName = 'UnknownError';
 
       this.logger.error(
-        `Unknown Exception: ${request.method} ${redactUrl(request.url)} -${JSON.stringify(exception)}`,
+        `[${requestId}] Unknown Exception: ${request.method} ${redactUrl(request.url)} -${JSON.stringify(exception)}`,
       );
     }
 
-    // Send consistent error response
+    // Send consistent error response (no path: see HttpExceptionFilter)
     response.status(status).json({
       statusCode: status,
       message,
       error: errorName,
       timestamp: new Date().toISOString(),
-      path: redactUrl(request.url), // the caller's own logs must not keep the token of a link either
     });
   }
 }

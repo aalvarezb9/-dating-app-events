@@ -8,6 +8,7 @@ import {
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { redactSensitive, redactUrl } from '../utils/redact';
+import { readRequestId } from '../utils/request-trace';
 
 const MAX_LOGGED_BODY_LENGTH = 2000;
 
@@ -25,7 +26,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const { method, body, user } = request;
     // The token of an appointment link is part of the path: never write it to the logs
-    const url = redactUrl(request.url);
+    const url = `[${readRequestId(request.headers) ?? '-'}] ${redactUrl(request.url)}`;
     const userEmail = user?.email || 'anonymous';
     const now = Date.now();
 

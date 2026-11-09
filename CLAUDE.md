@@ -129,7 +129,7 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | Archivo | Qué hace | Úsalo cuando |
 |---|---|---|
 | `context/execution-context.service.ts` | `ExecutionContext` (AsyncLocalStorage): `tenantId`, `userId`, `userEmail`, `userRoles`, `requestId`, flags `isPublic/isCrossTenant/includeDeleted`; `run(ctx, cb)`, `getTenantId()`… | Leer el tenant en cualquier capa; **abrirlo a mano en consumers, crons y colas** (`run({ tenantId }, cb)`). Nunca `repo.setTenantId` |
-| `interceptors/execution-context.interceptor.ts` | Puebla el `ExecutionContext` por petición HTTP desde el JWT y los metadatos de los decoradores | Registrarlo globalmente en `main.ts` antes de los guards |
+| `interceptors/execution-context.interceptor.ts` | Puebla el `ExecutionContext` por petición HTTP desde el JWT y los metadatos de los decoradores; `requestId` sale de la cabecera `X-Request-Id` del gateway (si tiene forma segura) y `traceparent` de la cabecera W3C | Registrarlo globalmente en `main.ts` antes de los guards |
 | `interceptors/sanitize.interceptor.ts` | Elimina HTML/XSS de `body`, `query` y `params` (recursivo) | Registro global en todo servicio con entrada de usuario |
 | `interceptors/logging.interceptor.ts` | Log de petición/respuesta con el cuerpo **redactado** y truncado | Registro global |
 | `interceptors/response-transform.interceptor.ts` | Envuelve la respuesta en `{ success, data, timestamp }` y aplica `@UseDto` | Registro global |
@@ -154,9 +154,10 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | `dto/filterable-query.dto.ts` | `FilterableQueryDto`, `DynamicFilters`, operadores (`$gte`, `$in`, `$like`…) | Filtros dinámicos traducidos por `BaseRepository` |
 | `dto/date-range.dto.ts`, `dto/base-response.dto.ts` | Rango de fechas validado; respuesta base `success/error` | Filtros por fechas; respuestas simples |
 | `interfaces/api-response.interface.ts` | `ApiResponse<T>`, `PaginatedResponse<T>` | Tipar respuestas |
-| `filters/all-exceptions.filter.ts`, `http-exception.filter.ts` | Convierten excepciones en respuestas JSON uniformes | Filtro global en `main.ts` |
+| `filters/all-exceptions.filter.ts`, `http-exception.filter.ts` | Convierten excepciones en respuestas JSON uniformes `{ statusCode, message, error, timestamp }` (**sin `path`**: la URL no se devuelve al cliente) y registran el error con el id de la petición | Filtro global en `main.ts` |
 | `types/auth.types.ts` | `UserRole` (`super_admin`, `business_owner`, `business_staff`, `customer`, `guest`) y `TenantType` | Cualquier chequeo de rol/tipo |
 | `constants/currencies.ts` | `VALID_CURRENCIES` (`HNL`, `USD`), `isValidCurrency` | Validar monedas |
+| `utils/request-trace.ts` | `readRequestId`/`readTraceparent` (leen y validan las cabeceras `X-Request-Id` y `traceparent` de la petición), `nextTraceparent` (misma traza, tramo nuevo) y `outgoingTraceHeaders()` (las cabeceras que debe llevar una llamada a otro servicio, tomadas del `ExecutionContext`). Los usan el interceptor de contexto, el de logs, los filtros y `BaseServiceClient` | Un log propio que deba llevar el id de la petición, o un cliente HTTP que no extienda `BaseServiceClient` |
 | `utils/redact.ts` | `redactSensitive`, `REDACTED`: enmascara contraseñas, tokens, cuentas, tarjetas…; `redactUrl`: enmascara el token del link de una cita en rutas (`/links/<token>`, `/access-links/<token>`). Lo usan el log de peticiones, los filtros de excepciones y `BaseServiceClient` | Cualquier log propio de un payload o de una URL |
 
 ### Entidades base y nombres de tabla (`database/entities/`)
@@ -240,7 +241,7 @@ El stream que abre el navegador (`GET /sse/stream?topics=agenda.salon-angel.*.20
 | `encryption/encryption.module.ts` | `EncryptionModule` | Importarlo donde se cifra |
 | `files/file-upload.ts` | Subidas seguras: `SINGLE_FILE_UPLOAD_OPTIONS` (multer corta lo que pase de 5 MB mientras llega), `assertValidUpload(file, tiposPermitidos)` (el tipo se detecta por los **bytes** del archivo, no por lo que dice el cliente; devuelve `{ mimeType, extension }`), `generateStorageFileName(ext)` (nombre generado por el servidor, nunca el del cliente) y los conjuntos `PAYMENT_PROOF_TYPES`, `HERO_IMAGE_TYPES`, `GALLERY_IMAGE_TYPES` | Cualquier endpoint que reciba un archivo (`@UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_OPTIONS))`); luego `FileStorageService.uploadFile` |
 | `files/file-upload.constants.ts` | `MAX_FILE_SIZE_BYTES` (5 MB) y `UPLOAD_ERRORS` (claves i18n `validation.error.file_required|file_size_exceeded|invalid_file_type`, iguales en todos los servicios) | Al traducir o probar los errores de una subida |
-| `http-client/base-service-client.ts` | `BaseServiceClient`: cliente Axios con API key, timeout y manejo de errores (`get/post/patch/put/delete`); un error HTTP del servicio remoto se relanza con su mismo estado (400/401/403/404/409 como excepciones de Nest) para que el llamador distinga un 404 de un fallo | Una clase por servicio remoto (`AuthServiceClient`) |
+| `http-client/base-service-client.ts` | `BaseServiceClient`: cliente Axios con API key, timeout, `X-Request-Id`/`traceparent` de la petición en curso (tramo nuevo) y manejo de errores (`get/post/patch/put/delete`); un error HTTP del servicio remoto se relanza con su mismo estado (400/401/403/404/409 como excepciones de Nest) para que el llamador distinga un 404 de un fallo | Una clase por servicio remoto (`AuthServiceClient`) |
 | `http-client/http-client.module.ts` | `HttpClientModule` | Importarlo donde hay clientes HTTP |
 | `index.ts` | Reexporta lo público | Todo export nuevo pasa por aquí |
 
