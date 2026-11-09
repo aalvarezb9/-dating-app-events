@@ -56,6 +56,7 @@ export * from './http-client';
 // Database Utilities
 export * from './database/transaction-manager';
 export * from './database/advisory-lock-manager';
+export * from './database/prefix-search-indexes';
 export * from './database/entities';
 
 // Contracts between services (events, projections, requests)
