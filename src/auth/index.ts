@@ -18,5 +18,8 @@ export * from './strategies/supabase-jwt.strategy';
 // Cut the sessions of a tenant that is not active
 export * from './tenant-block';
 
+// Sessions of the super administrators that passed the second factor
+export * from './admin-session';
+
 // Module
 export * from './auth.module';

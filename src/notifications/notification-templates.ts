@@ -12,6 +12,12 @@ export interface NotificationTemplateCatalog {
   /** Confirm the email of a new account. `link` carries the token: mark it as sensitive. */
   EMAIL_VERIFICATION: { name?: string; link: string; expiresAt: string };
 
+  /** The second factor of a super administrator's login. `code` is a secret: mark it as sensitive. */
+  ADMIN_LOGIN_CODE: { name?: string; code: string; expiresAt: string };
+
+  /** Invites a super administrator to choose their password. `link` carries the token: mark it as sensitive. */
+  ADMIN_INVITATION: { name?: string; invitedBy?: string; link: string; expiresAt: string };
+
   /** The personal link of an appointment (see it, move it, cancel it, pay it). `link` carries the token. */
   APPOINTMENT_ACCESS_LINK: {
     attendeeName?: string;
@@ -98,6 +104,8 @@ export type TypedTemplate = {
 /** The keys of the catalog, for the checks that every key has a file (the catalog is an interface: no runtime list) */
 export const NOTIFICATION_TEMPLATE_KEYS: readonly NotificationTemplateKey[] = [
   'EMAIL_VERIFICATION',
+  'ADMIN_LOGIN_CODE',
+  'ADMIN_INVITATION',
   'APPOINTMENT_ACCESS_LINK',
   'APPOINTMENT_CONFIRMED',
   'APPOINTMENT_CANCELLED',

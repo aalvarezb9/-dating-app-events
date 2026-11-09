@@ -6,6 +6,8 @@ export interface ICurrentUser {
   tenantType: string;
   email: string;
   role: string;
+  /** `session_id` of the token: identifies the session of a super administrator (see auth/admin-session.ts) */
+  sessionId?: string;
   cognitoSub?: string;
 }
 

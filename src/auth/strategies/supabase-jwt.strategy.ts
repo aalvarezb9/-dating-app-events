@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SharedConfigService } from '../../config/env.config';
+import { isAdminSessionAuthorized } from '../admin-session';
 import { TenantBlockCache, tenantBlockedWith } from '../tenant-block';
 
 /** How long a successful "user still exists" check is reused */
@@ -20,6 +21,7 @@ const USER_CHECK_CACHE_MAX_ENTRIES = 10_000;
  * - User verification via Supabase Auth API
  * - Tenant check: a token of a tenant that is not active any more (pending, suspended, rejected) is
  *   refused with 403 even though it has not expired (see ../tenant-block.ts)
+ * - A super administrator's token is refused unless its session passed the second factor (see ../admin-session.ts)
  * - Custom claims extraction (app_metadata)
  * - Integration with NestJS Guards
  *
@@ -126,13 +128,22 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
       throw new ForbiddenException(`account.error.tenant_${blockedWith}`);
     }
 
+    const role = payload.app_metadata?.role || payload.role; // Prefer custom role from app_metadata
+
+    // A super administrator needs the second factor: a session that auth did not record after the code was
+    // right (for instance a token asked for straight to the identity provider) is refused
+    if (role === 'super_admin' && !(await isAdminSessionAuthorized(this.cache, payload.session_id))) {
+      throw new UnauthorizedException('admin.error.second_factor_required');
+    }
+
     // Extract user data and custom claims
     return {
       userId: payload.sub,
       email: payload.email,
       tenantId,
       tenantType: payload.app_metadata?.tenantType,
-      role: payload.app_metadata?.role || payload.role, // Prefer custom role from app_metadata
+      role,
+      sessionId: payload.session_id,
     };
   }
 }
