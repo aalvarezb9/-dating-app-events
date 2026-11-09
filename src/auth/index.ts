@@ -21,5 +21,8 @@ export * from './tenant-block';
 // Sessions of the super administrators that passed the second factor
 export * from './admin-session';
 
+// Sessions in which a super administrator acts as another person to give them support
+export * from './support-session';
+
 // Module
 export * from './auth.module';

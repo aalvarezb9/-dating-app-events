@@ -4,6 +4,7 @@ import { Strategy, ExtractJwt } from 'passport-jwt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SharedConfigService } from '../../config/env.config';
 import { isAdminSessionAuthorized } from '../admin-session';
+import { isSupportSessionOpen } from '../support-session';
 import { TenantBlockCache, tenantBlockedWith } from '../tenant-block';
 
 /** How long a successful "user still exists" check is reused */
@@ -136,6 +137,13 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
       throw new UnauthorizedException('admin.error.second_factor_required');
     }
 
+    // A token that says a super administrator acts as this person is a support session: auth must have opened it, and
+    // it can never be the token of an administrator (nobody acts as one). An ended session is refused at once.
+    const impersonatedBy = payload.app_metadata?.impersonatedBy;
+    if (impersonatedBy && (role === 'super_admin' || !(await isSupportSessionOpen(this.cache, payload.session_id)))) {
+      throw new UnauthorizedException('support.error.session_ended');
+    }
+
     // Extract user data and custom claims
     return {
       userId: payload.sub,
@@ -144,6 +152,8 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jw
       tenantType: payload.app_metadata?.tenantType,
       role,
       sessionId: payload.session_id,
+      impersonatedBy,
+      supportMode: impersonatedBy ? payload.app_metadata?.supportMode : undefined,
     };
   }
 }
