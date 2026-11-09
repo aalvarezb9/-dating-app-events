@@ -207,27 +207,22 @@ El contrato se prueba desde `backend-dating-notifications/src/contract` (la libr
 
 ### Tiempo real para la UI por SSE (`sse/`)
 
-Señales **efímeras** que la UI recibe por SSE para refrescar lo que está mostrando (un calendario, una lista) cuando otra persona cambia algo. No es una notificación a alguien ni se guarda: si nadie escuchaba, se pierde y la UI ve la verdad la próxima vez que consulta la API. **No hay un servicio aparte**: todo vive aquí y cada servicio lo importa.
+Señales **efímeras** que la UI recibe por SSE para refrescar lo que está mostrando (un calendario, una lista) cuando otra persona cambia algo. Se piden igual que un correo: el servicio **publica en Kafka** y `backend-dating-notifications`, que es quien tiene las conexiones abiertas de los navegadores, la entrega. **Ningún otro servicio conoce Redis ni mantiene conexiones SSE.** Nada se guarda: si nadie escuchaba, se pierde y la UI ve la verdad la próxima vez que consulta la API.
 
 ```ts
-// Cualquier servicio que avisa (schedule): solo emite
-imports: [SseModule.forRoot()]
+imports: [SseModule]   // junto a EventsModule y SharedConfigModule
 await this.sse.emit('agenda.salon-angel.no-team.2030-06-20', { type: 'booked', memberId: null, startsAt, endsAt }); // tras el commit
-
-// El servicio público que atiende a la UI (users): además sirve el stream
-imports: [SseModule.forRoot({ serve: true })]   // registra GET /sse/stream?topics=agenda.salon-angel.*.2030-06-20
 ```
 
-El puente es **Redis pub/sub** (el canal `sse:events`): lo emite una instancia de cualquier servicio y lo oyen todas las instancias que sirven el stream, que lo escriben en sus propias conexiones. En Railway es su servicio de Redis, el mismo que ya usan BullMQ y los locks.
+El stream que abre el navegador (`GET /sse/stream?topics=agenda.salon-angel.*.2030-06-20`) lo sirve notificaciones; ver su CLAUDE.md.
 
 | Archivo | Qué hace | Úsalo cuando |
 |---|---|---|
 | `sse.topics.ts` | Nombres jerárquicos con puntos (`agenda.<subdominio>.<miembro\|no-team>.<YYYY-MM-DD>`): `validateTopic`, `validatePattern` (`*` = un segmento, `#` = el resto, solo al final), `topicMatches`, `isPublicAgendaPattern` (un patrón público de agenda **debe nombrar el negocio**: `agenda.*` y `agenda.#` serían un chorro de todos), `agendaTopic`, `agendaTopics({ subdomain, memberId, startsAt, endsAt, timeZone })` (un topic por día local que toca la cita), el tipo `AgendaSignal` | Emitir (nombrar bien) o suscribir (validar) |
-| `sse.service.ts` | `SseService.emit(topic, datos)` / `emitMany(topics, datos)`: publica en Redis. Nunca lanza, no espera a Redis (sin cola offline), valida el nombre y limita la señal a 2 KB; avisa una sola vez por caída | Cambió algo que alguien puede estar mirando. **Después del commit** |
-| `sse.hub.ts` + `sse.controller.ts` + `sse.settings.ts` | Solo con `serve: true`: `GET /sse/stream?topics=…` **público**, estricto (solo patrones de agenda que nombran el negocio, tope de patrones por conexión, tope de conexiones por instancia → 503, latido, vida máxima de la conexión con `event: reconnect`, desconecta al cliente lento). El nombre del evento SSE es el topic. Configuración **obligatoria** (sin valores por defecto): `SSE_HEARTBEAT_SECONDS`, `SSE_MAX_CONNECTION_SECONDS`, `SSE_MAX_CONNECTIONS`, `SSE_MAX_TOPICS_PER_CONNECTION`, `SSE_SLOW_CLIENT_BYTES` | El servicio público que atiende a la UI (users). Los demás no lo activan |
-| `sse.module.ts` | `SseModule.forRoot({ serve? })` (global): provee `SseService` (necesita `SharedConfigModule`; el servicio debe tener `ioredis`) | En el `AppModule` de quien emite o sirve |
+| `sse.service.ts` | `SseService.emit(topic, datos)` / `emitMany(topics, datos)`: publica el evento `SSE_SIGNAL` en Kafka (clave de partición = `agenda.<negocio>`, así las señales de un negocio llegan en orden). Nunca lanza, valida el nombre y limita la señal a 2 KB | Cambió algo que alguien puede estar mirando. **Después del commit** |
+| `sse.module.ts` | `SseModule` (global): provee `SseService` (necesita `EventsModule` y `SharedConfigModule`; sin variables propias) | En el `AppModule` de quien emite |
 
-**La señal es una pista, no un dato**: `{ type, memberId, startsAt, endsAt }`, sin clientes ni ids de citas. La UI la recibe y vuelve a consultar la API, que decide qué puede ver cada quien. El contrato se prueba desde `backend-dating-notifications/src/contract` y el hub desde `backend-dating-user`.
+**La señal es una pista, no un dato**: `{ type, memberId, startsAt, endsAt }`, sin clientes ni ids de citas. La UI la recibe y vuelve a consultar la API, que decide qué puede ver cada quien. Los nombres y el servicio se prueban desde `backend-dating-notifications/src/contract` (la librería no tiene tests propios).
 
 ### Otros módulos
 
