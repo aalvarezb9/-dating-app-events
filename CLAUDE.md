@@ -41,7 +41,7 @@ npm test          # jest
 | Acceso a datos con filtro de tenant y soft delete automáticos | Heredar de `BaseRepository` | `repositories/base/BaseRepository.ts` |
 | Recibir un archivo que sube el cliente (comprobante, imagen) | `assertValidUpload` + `SINGLE_FILE_UPLOAD_OPTIONS` (tipo por contenido, tope de tamaño), luego `FileStorageService` | `files/` |
 | Avisar a una persona (email, push, bandeja, SSE) | `NotificationClient.emit(canal, { recipient, template \| raw, category })` (comando por Kafka, después del commit, nunca lanza) | `notifications/` |
-| Avisar a la UI en tiempo real de un cambio (un hueco de la agenda se ocupó) | `SseService.emit(topic, señal)` / `agendaTopics(...)` (Redis pub/sub → SSE; sin persistencia; después del commit, nunca lanza) | `sse/` |
+| Avisar a la UI en tiempo real de un cambio (un hueco de la agenda se ocupó) | `SseService.emit(topic, señal)` / `agendaTopics(...)` (canal SSE de notificaciones; sin persistencia; después del commit, nunca lanza) | `sse/` |
 | Publicar un evento sin que se pierda aunque Kafka falle | `OutboxService.enqueue(manager, evento)` (misma transacción que el cambio) | `outbox/` |
 | Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
 | Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
@@ -207,7 +207,7 @@ El contrato se prueba desde `backend-dating-notifications/src/contract` (la libr
 
 ### Tiempo real para la UI por SSE (`sse/`)
 
-Señales **efímeras** que la UI recibe por SSE para refrescar lo que está mostrando (un calendario, una lista) cuando otra persona cambia algo. Se piden igual que un correo: el servicio **publica en Kafka** y `backend-dating-notifications`, que es quien tiene las conexiones abiertas de los navegadores, la entrega. **Ningún otro servicio conoce Redis ni mantiene conexiones SSE.** Nada se guarda: si nadie escuchaba, se pierde y la UI ve la verdad la próxima vez que consulta la API.
+Señales **efímeras** que la UI recibe por SSE para refrescar lo que está mostrando (un calendario, una lista) cuando otra persona cambia algo. **SSE es un canal más de las notificaciones**, como el email: `SseService.emit` es `NotificationClient.emit(NotificationChannel.SSE, { signal: { topic, data } })`, un comando por Kafka (`NOTIFICATION_SSE`) que `backend-dating-notifications`, quien tiene las conexiones abiertas de los navegadores, entrega con el mismo flujo que un correo. **Ningún otro servicio conoce Redis ni mantiene conexiones SSE.** Nada se guarda: si nadie escuchaba, se pierde y la UI ve la verdad la próxima vez que consulta la API. Una señal no tiene destinatario (`recipient: {}`): llega a quien escuche el topic, y `ALL` nunca la incluye.
 
 ```ts
 imports: [SseModule]   // junto a EventsModule y SharedConfigModule
@@ -219,8 +219,8 @@ El stream que abre el navegador (`GET /sse/stream?topics=agenda.salon-angel.*.20
 | Archivo | Qué hace | Úsalo cuando |
 |---|---|---|
 | `sse.topics.ts` | Nombres jerárquicos con puntos (`agenda.<subdominio>.<miembro\|no-team>.<YYYY-MM-DD>`): `validateTopic`, `validatePattern` (`*` = un segmento, `#` = el resto, solo al final), `topicMatches`, `isPublicAgendaPattern` (un patrón público de agenda **debe nombrar el negocio**: `agenda.*` y `agenda.#` serían un chorro de todos), `agendaTopic`, `agendaTopics({ subdomain, memberId, startsAt, endsAt, timeZone })` (un topic por día local que toca la cita), el tipo `AgendaSignal` | Emitir (nombrar bien) o suscribir (validar) |
-| `sse.service.ts` | `SseService.emit(topic, datos)` / `emitMany(topics, datos)`: publica el evento `SSE_SIGNAL` en Kafka (clave de partición = `agenda.<negocio>`, así las señales de un negocio llegan en orden). Nunca lanza, valida el nombre y limita la señal a 2 KB | Cambió algo que alguien puede estar mirando. **Después del commit** |
-| `sse.module.ts` | `SseModule` (global): provee `SseService` (necesita `EventsModule` y `SharedConfigModule`; sin variables propias) | En el `AppModule` de quien emite |
+| `sse.service.ts` | `SseService.emit(topic, datos)` / `emitMany(topics, datos)`: envoltorio fino de `NotificationClient.emit(SSE, { signal })` (la clave de partición es `agenda.<negocio>`, así las señales de un negocio llegan en orden; el contrato limita la señal a 2 KB). Nunca lanza y valida el nombre | Cambió algo que alguien puede estar mirando. **Después del commit** |
+| `sse.module.ts` | `SseModule` (global): provee `SseService` (importa `NotificationsModule`; necesita `EventsModule` y `SharedConfigModule`; sin variables propias) | En el `AppModule` de quien emite |
 
 **La señal es una pista, no un dato**: `{ type, memberId, startsAt, endsAt }`, sin clientes ni ids de citas. La UI la recibe y vuelve a consultar la API, que decide qué puede ver cada quien. Los nombres y el servicio se prueban desde `backend-dating-notifications/src/contract` (la librería no tiene tests propios).
 
