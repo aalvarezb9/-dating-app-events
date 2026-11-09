@@ -82,7 +82,19 @@ export interface NotificationRawContent {
 }
 
 /**
- * The command published to Kafka. Exactly one of `template` and `raw` carries the content.
+ * What the SSE channel delivers: a signal for whoever is listening to a matching topic in the UI. It has no
+ * recipient and no text: it is a HINT (`{ type, startsAt… }`) that the UI answers by asking the API again.
+ * Topics and patterns are described in `sse/sse.topics.ts`.
+ */
+export interface NotificationSignal {
+  /** `agenda.salon-angel.no-team.2030-06-20` */
+  topic: string;
+  data: Record<string, unknown>;
+}
+
+/**
+ * The command published to Kafka. Exactly one of `template`, `raw` and `signal` carries the content: a template
+ * or raw text goes to a person (email…), a signal goes to the SSE channel and reaches whoever listens to its topic.
  *
  * `sensitiveFields` lists dotted paths inside the message (`template.data.link`) that are secrets:
  * the notifications service never writes them to its delivery log.
@@ -91,9 +103,12 @@ export interface NotificationMessage {
   /** UUID; with the channel, the idempotency key of the delivery */
   id: string;
   channel: NotificationChannel;
+  /** Who it is for. A signal has no recipient: it is `{}` */
   recipient: NotificationRecipient;
   template?: NotificationTemplateContent;
   raw?: NotificationRawContent;
+  /** SSE channel only */
+  signal?: NotificationSignal;
   attachments?: NotificationAttachment[];
   category: NotificationCategory;
   sensitiveFields?: string[];
@@ -107,6 +122,8 @@ export interface NotificationMessage {
   correlationId?: string;
 }
 
+/** A signal is a hint, not a record: a big payload is a mistake */
+export const MAX_SIGNAL_BYTES = 2048;
 export const MAX_ATTACHMENTS = 5;
 export const MAX_BODY_LENGTH = 20_000;
 export const MAX_SUBJECT_LENGTH = 200;

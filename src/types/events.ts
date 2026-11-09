@@ -74,10 +74,6 @@ export enum DomainEventType {
   NOTIFICATION_UI = 'NOTIFICATION_UI',
   NOTIFICATION_SSE = 'NOTIFICATION_SSE',
   NOTIFICATION_ALL = 'NOTIFICATION_ALL',
-
-  // A real-time signal for the UI (see sse/sse.service.ts). Like the notification commands, any service publishes it
-  // and the notifications service, which holds the SSE connections, delivers it.
-  SSE_SIGNAL = 'SSE_SIGNAL',
 }
 
 /**

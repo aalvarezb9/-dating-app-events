@@ -3,12 +3,14 @@ import {
   DeliveryChannel,
   MAX_ATTACHMENTS,
   MAX_BODY_LENGTH,
+  MAX_SIGNAL_BYTES,
   MAX_SUBJECT_LENGTH,
   NOTIFICATION_CATEGORIES,
   NotificationChannel,
   NotificationMessage,
   NotificationRecipient,
 } from './notification.contract';
+import { validateTopic } from '../sse/sse.topics';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -31,8 +33,11 @@ export function canReach(recipient: NotificationRecipient, channel: DeliveryChan
     case NotificationChannel.PUSH:
       return Boolean(recipient.userId) || (recipient.deviceTokens?.length ?? 0) > 0;
     case NotificationChannel.UI:
-    case NotificationChannel.SSE:
       return Boolean(recipient.userId);
+    case NotificationChannel.SSE:
+      // The SSE channel delivers SIGNALS to whoever listens to a topic, not messages to a person: no recipient
+      // reaches it, so an `ALL` never goes through it (a signal is ordered to the SSE channel on purpose)
+      return false;
   }
 }
 
@@ -72,11 +77,26 @@ export function validateNotificationMessage(message: unknown): string[] {
     if (recipient.deviceTokens !== undefined && !(Array.isArray(recipient.deviceTokens) && recipient.deviceTokens.every((t) => isText(t)))) errors.push('recipient.deviceTokens must be a list of tokens');
   }
 
-  // Content: exactly one of template / raw
+  // Content: exactly one of template / raw / signal; a signal is the content of the SSE channel and of no other
   const hasTemplate = m.template !== undefined;
   const hasRaw = m.raw !== undefined;
-  if (hasTemplate === hasRaw) {
-    errors.push('exactly one of template and raw is required');
+  const hasSignal = m.signal !== undefined;
+  if ([hasTemplate, hasRaw, hasSignal].filter(Boolean).length !== 1) {
+    errors.push('exactly one of template, raw and signal is required');
+  }
+  if (hasSignal !== (m.channel === NotificationChannel.SSE)) {
+    errors.push(hasSignal ? 'a signal can only go through the SSE channel' : 'the SSE channel delivers a signal');
+  }
+  if (hasSignal) {
+    const signal = m.signal;
+    if (!isObject(signal)) {
+      errors.push('signal must be an object');
+    } else {
+      const topicProblem = validateTopic(signal.topic);
+      if (topicProblem) errors.push(`signal.topic: ${topicProblem}`);
+      if (!isObject(signal.data)) errors.push('signal.data must be an object');
+      else if (Buffer.byteLength(JSON.stringify(signal.data)) > MAX_SIGNAL_BYTES) errors.push(`signal.data is bigger than ${MAX_SIGNAL_BYTES} bytes`);
+    }
   }
   if (hasTemplate) {
     const template = m.template;
@@ -102,8 +122,8 @@ export function validateNotificationMessage(message: unknown): string[] {
       if (m.channel === NotificationChannel.ALL && (!isText(raw.subject, MAX_SUBJECT_LENGTH) || !isText(raw.title, MAX_SUBJECT_LENGTH))) {
         errors.push('raw.subject and raw.title are required for ALL');
       }
-      if ([NotificationChannel.PUSH, NotificationChannel.UI, NotificationChannel.SSE].includes(m.channel as NotificationChannel) && !isText(raw.title, MAX_SUBJECT_LENGTH)) {
-        errors.push('raw.title is required for push, UI and SSE');
+      if ([NotificationChannel.PUSH, NotificationChannel.UI].includes(m.channel as NotificationChannel) && !isText(raw.title, MAX_SUBJECT_LENGTH)) {
+        errors.push('raw.title is required for push and UI');
       }
     }
   }
@@ -118,7 +138,11 @@ export function validateNotificationMessage(message: unknown): string[] {
       } else if (channelsFor({ recipient: target, channels: requested as DeliveryChannel[] | undefined }).length === 0) {
         errors.push('the recipient cannot be reached through any of the channels (give an email or a userId)');
       }
-    } else if ((DELIVERY_CHANNELS as readonly string[]).includes(m.channel as string) && !canReach(target, m.channel as DeliveryChannel)) {
+    } else if (
+      m.channel !== NotificationChannel.SSE && // a signal has no recipient
+      (DELIVERY_CHANNELS as readonly string[]).includes(m.channel as string) &&
+      !canReach(target, m.channel as DeliveryChannel)
+    ) {
       errors.push(`the recipient cannot be reached through ${m.channel} (${neededFor(m.channel as DeliveryChannel)})`);
     }
   }

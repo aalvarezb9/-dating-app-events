@@ -11,6 +11,7 @@ import {
   NotificationChannel,
   NotificationMessage,
   NotificationRawContent,
+  NotificationSignal,
   NotificationRecipient,
 } from './notification.contract';
 import { TypedTemplate } from './notification-templates';
@@ -18,7 +19,8 @@ import { validateNotificationMessage } from './notification.validation';
 
 /** What an emitter gives: the content (a typed template OR raw text), the recipient and the category */
 export type NotificationInput = {
-  recipient: NotificationRecipient;
+  /** Not given for a signal (SSE): it reaches whoever listens to the topic, not a person */
+  recipient?: NotificationRecipient;
   category: NotificationCategory;
   attachments?: NotificationAttachment[];
   /** Paths inside the message that are secrets (`template.data.link`): the delivery log never stores them */
@@ -28,17 +30,23 @@ export type NotificationInput = {
   correlationId?: string;
   /** Give it to make an emit repeatable (retrying the same business operation must not notify twice) */
   id?: string;
-} & ({ template: TypedTemplate; raw?: never } | { raw: NotificationRawContent; template?: never });
+} & (
+  | { template: TypedTemplate; raw?: never; signal?: never }
+  | { raw: NotificationRawContent; template?: never; signal?: never }
+  | { signal: NotificationSignal; template?: never; raw?: never }
+);
 
 /** Builds the message of an emit: adds the id, the time and the sender. Pure, so it can be tested without Kafka. */
 export function buildNotificationMessage(channel: NotificationChannel, input: NotificationInput, source: string): NotificationMessage {
-  const { id, template, raw, ...rest } = input;
+  const { id, template, raw, signal, recipient, ...rest } = input;
   return {
     ...rest,
+    recipient: recipient ?? {},
     id: id ?? randomUUID(),
     channel,
     ...(template ? { template } : {}),
     ...(raw ? { raw } : {}),
+    ...(signal ? { signal } : {}),
     occurredAt: new Date().toISOString(),
     source,
   };
@@ -106,7 +114,11 @@ export function notificationEvent(message: NotificationMessage): DomainEvent {
   };
 }
 
-/** The same recipient always lands in the same partition: its notifications are delivered in order */
+/**
+ * The same recipient always lands in the same partition: its notifications are delivered in order. The signals of one
+ * business (`agenda.<business>`, the first two segments of the topic) share a partition for the same reason.
+ */
 export function notificationPartitionKey(message: NotificationMessage): string {
+  if (message.signal) return message.signal.topic.split('.').slice(0, 2).join('.');
   return message.recipient.userId ?? message.recipient.email ?? message.id;
 }
