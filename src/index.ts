@@ -76,8 +76,8 @@ export * from './files';
 // Notification commands (emit an email / push / in-app / SSE order; delivered by backend-dating-notifications)
 export * from './notifications';
 
-// Real-time signals for the UI (SSE): emit with RealtimeClient, topics and patterns shared with the hub
-export * from './realtime';
+// Real-time signals for the UI over SSE: `sse.emit(topic, data)` from any service; the public one serves the stream
+export * from './sse';
 
 // Encryption
 export * from './encryption/encryption.service';
