@@ -70,6 +70,7 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 | Archivo | Qué hace | Úsalo cuando |
 |---|---|---|
 | `env.config.ts` | `SharedConfigService`: lee y **valida** las variables de entorno y las expone tipadas (`database`, `supabase`, `redis`, `app`, `jwtSecret`, `kafka`, `get(key)` para opcionales). Falla al arrancar si falta una requerida | Siempre que un servicio necesite configuración. Nunca `process.env` |
+| `connections.ts` | Cómo llegar a Kafka y a Redis con TLS/SASL si el entorno lo pide: `kafkaClientConnection(config.kafka)` (`{ brokers, ssl?, sasl? }` para `new Kafka(...)` o el `client` de un transporte Nest), `redisConnectionOptions(config.redis)` (ioredis y `connection` de BullMQ) y `redisUrl(config.redis)` (`redis://` o `rediss://`, para Keyv). **Todo cliente de Kafka o Redis se construye con ellos**: nunca con `brokers`/`host` sueltos, o en la nube no conecta | Al crear cualquier cliente de Kafka o Redis |
 | `shared-config.module.ts` | `SharedConfigModule` (global): provee `SharedConfigService` | Importarlo una vez en el `AppModule` |
 
 ### Autenticación (`auth/`)
@@ -261,7 +262,7 @@ Para añadir un proveedor: crear la estrategia en `auth/strategies/` o `storage/
 - Los servicios acceden a env **solo** vía `SharedConfigService`; nunca `process.env`.
 - Variables requeridas lanzan error si faltan (`getRequired`), sin valores por defecto. Config disponible: `database`, `supabase`, `redis`, `app`, `jwtSecret`, `kafka`, y `get(key)` para opcionales.
 - ⚠️ Excepción actual: `kafka.brokers` cae a `['localhost:9092']` y `clientId` a `SERVICE_NAMESPACE || 'backend-service'`. No replicar este patrón.
-- Variables que usa la librería: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_STORAGE_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD?`, `PORT`, `NODE_ENV`, `BASE_DOMAIN`, `JWT_SECRET`, `KAFKA_BROKERS`, `SERVICE_NAMESPACE` (abreviatura, prefijo de tablas), `SERVICE_NAME` (nombre completo), `AUTH_PROVIDER?`, `STORAGE_PROVIDER?`, `ENCRYPTION_KEY`.
+- Variables que usa la librería: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_STORAGE_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME?`, `REDIS_PASSWORD?`, `REDIS_TLS?` (`true` en Redis gestionado), `PORT`, `NODE_ENV`, `BASE_DOMAIN`, `JWT_SECRET`, `KAFKA_BROKERS`, `KAFKA_SSL?` (`true` en Kafka gestionado), `KAFKA_SASL_MECHANISM?` (`plain`, `scram-sha-256` o `scram-sha-512`; si está, `KAFKA_SASL_USERNAME` y `KAFKA_SASL_PASSWORD` son obligatorios), `SERVICE_NAMESPACE` (abreviatura, prefijo de tablas), `SERVICE_NAME` (nombre completo), `AUTH_PROVIDER?`, `STORAGE_PROVIDER?`, `ENCRYPTION_KEY`.
 
 ### Eventos (Kafka)
 - `EventPublisher.publishEvent(event, partitionKey?)`: fire-and-forget con productor idempotente y auto-creación de topics. La clave de partición (default `aggregateId`) garantiza orden por entidad.

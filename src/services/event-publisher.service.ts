@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
 import { DomainEvent, DomainEventType } from '../types/events';
 import { SharedConfigService } from '../config/env.config';
+import { kafkaClientConnection } from '../config/connections';
 import { randomUUID } from 'crypto';
 import { lastValueFrom } from 'rxjs';
 
@@ -51,7 +52,7 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
       options: {
         client: {
           clientId: kafkaConfig.clientId,
-          brokers: kafkaConfig.brokers,
+          ...kafkaClientConnection(kafkaConfig),
           retry: {
             retries: 5,
             initialRetryTime: 300,

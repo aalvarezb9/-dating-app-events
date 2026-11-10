@@ -3,6 +3,7 @@ import { DataSource, LessThan } from 'typeorm';
 import { EventPublisher } from '../services/event-publisher.service';
 import { AdvisoryLockManager } from '../database/advisory-lock-manager';
 import { SharedConfigService } from '../config/env.config';
+import { kafkaClientConnection } from '../config/connections';
 import { OutboxEvent } from './outbox-event.entity';
 import { ensureTopicRetention } from './sensitive-topics';
 
@@ -105,7 +106,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     this.lastTopicAttempt = Date.now();
     try {
       const kafka = this.config.kafka;
-      await ensureTopicRetention(kafka.brokers, kafka.clientId, Object.keys(this.options.redact), this.topicRetentionHours);
+      await ensureTopicRetention(kafkaClientConnection(kafka), kafka.clientId, Object.keys(this.options.redact), this.topicRetentionHours);
       this.topicsProtected = true;
       this.logger.log(`Topics ${Object.keys(this.options.redact).join(', ')} keep their messages ${this.topicRetentionHours} h`);
     } catch (error: any) {

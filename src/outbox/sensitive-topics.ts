@@ -1,4 +1,5 @@
 import { ConfigResourceTypes, Kafka } from 'kafkajs';
+import { KafkaConnection } from '../config/connections';
 
 const HOUR_MS = 3_600_000;
 
@@ -17,7 +18,7 @@ const HOUR_MS = 3_600_000;
  * delivered within that time (the person can ask for the link again).
  */
 export async function ensureTopicRetention(
-  brokers: string[],
+  connection: KafkaConnection,
   clientId: string,
   topics: string[],
   retentionHours: number,
@@ -32,7 +33,7 @@ export async function ensureTopicRetention(
     { name: 'segment.ms', value: String(Math.min(retentionMs, HOUR_MS)) },
   ];
 
-  const admin = new Kafka({ brokers, clientId: `${clientId}-topic-admin`, retry: { retries: 3 } }).admin();
+  const admin = new Kafka({ ...connection, clientId: `${clientId}-topic-admin`, retry: { retries: 3 } }).admin();
   await admin.connect();
   try {
     // false when a topic already exists (the settings are applied below either way)

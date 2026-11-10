@@ -31,6 +31,7 @@ export * from './events.module';
 
 // Configuration
 export * from './config/env.config';
+export * from './config/connections';
 export * from './config/shared-config.module';
 
 // Storage

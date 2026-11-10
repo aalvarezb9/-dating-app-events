@@ -10,6 +10,7 @@
 
 // Configuration (SharedConfigService reads the environment; nothing else may)
 export * from './config/env.config';
+export * from './config/connections';
 export * from './config/shared-config.module';
 
 // Who a route is for

@@ -17,7 +17,11 @@ export interface SupabaseConfig {
 export interface RedisConfig {
   host: string;
   port: number;
+  /** ACL user (Redis 6+): managed Redis gives one besides the password; locally there is none */
+  username?: string;
   password?: string;
+  /** TLS to the server (`rediss://`): every managed Redis asks for it */
+  tls: boolean;
 }
 
 export interface AppConfig {
@@ -26,10 +30,23 @@ export interface AppConfig {
   baseDomain: string;
 }
 
+export type KafkaSaslMechanism = 'plain' | 'scram-sha-256' | 'scram-sha-512';
+
+/** One shape per mechanism, as kafkajs types its `sasl` option (so it can be passed on as is) */
+export type KafkaSasl = {
+  [M in KafkaSaslMechanism]: { mechanism: M; username: string; password: string };
+}[KafkaSaslMechanism];
+
 export interface KafkaConfig {
   brokers: string[];
   clientId: string;
+  /** TLS to the brokers: every managed Kafka asks for it */
+  ssl: boolean;
+  /** Login to the brokers; locally the broker is open and there is none */
+  sasl?: KafkaSasl;
 }
+
+const KAFKA_SASL_MECHANISMS: readonly string[] = ['plain', 'scram-sha-256', 'scram-sha-512'];
 
 /**
  * Shared Configuration Service
@@ -91,7 +108,9 @@ export class SharedConfigService {
     return {
       host: this.getRequired('REDIS_HOST'),
       port: parseInt(this.getRequired('REDIS_PORT')),
+      username: this.configService.get('REDIS_USERNAME') || undefined, // Opcional
       password: this.configService.get('REDIS_PASSWORD'), // Opcional
+      tls: this.getFlag('REDIS_TLS'), // Opcional: apagado por defecto (Redis local)
     };
   }
 
@@ -120,7 +139,33 @@ export class SharedConfigService {
     return {
       brokers: this.getArray('KAFKA_BROKERS') || ['localhost:9092'],
       clientId: this.serviceName,
+      ssl: this.getFlag('KAFKA_SSL'),
+      sasl: this.kafkaSasl(),
     };
+  }
+
+  /**
+   * Login to the brokers, only when KAFKA_SASL_MECHANISM is set (then user and password are required: a half login
+   * would fail at the first connection with a message that does not say what is missing).
+   */
+  private kafkaSasl(): KafkaSasl | undefined {
+    const mechanism = this.configService.get<string>('KAFKA_SASL_MECHANISM')?.trim().toLowerCase();
+    if (!mechanism) {
+      return undefined;
+    }
+    if (!KAFKA_SASL_MECHANISMS.includes(mechanism)) {
+      throw new Error(`Invalid KAFKA_SASL_MECHANISM "${mechanism}": use ${KAFKA_SASL_MECHANISMS.join(', ')}.`);
+    }
+    return {
+      mechanism,
+      username: this.getRequired('KAFKA_SASL_USERNAME'),
+      password: this.getRequired('KAFKA_SASL_PASSWORD'),
+    } as KafkaSasl;
+  }
+
+  /** An optional on/off switch: only the text "true" turns it on */
+  private getFlag(key: string): boolean {
+    return this.configService.get<string>(key)?.trim().toLowerCase() === 'true';
   }
 
   /**
