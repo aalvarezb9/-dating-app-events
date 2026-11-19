@@ -71,6 +71,9 @@ export * from './messaging';
 // Clients of the services whose queues others send to (`ScheduleQueueClient`; `NotificationClient` is under notifications)
 export * from './clients';
 
+// Receiving: `consume(AppModule, Consumer)` is the entry of a Lambda that reads an SQS queue and calls the @EventPattern methods
+export * from './async';
+
 // Projections (local read copies of other services' data) and snapshots
 export * from './projections';
 

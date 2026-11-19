@@ -1,1 +1,1 @@
-export * from './async-sqs-handler';
+export * from './consume';
