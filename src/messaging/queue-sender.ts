@@ -18,7 +18,7 @@ export interface SendOptions {
  * Sends one message to a queue, by the logical name of the registry (`QUEUES`). It is the only code that talks to SQS for sending.
  *
  * - `send` is for a queue OF THIS SERVICE (the reservation timer of schedule): it refuses a queue that belongs to another one.
- * - `sendTo` is for the client of the service that owns the queue (`ScheduleClient`, `NotificationClient`): a service does not
+ * - `sendTo` is for the client of the service that owns the queue (`ScheduleQueueClient`, `NotificationClient`): a service does not
  *   call it, it calls that client, which knows the shape of the message and its group.
  */
 @Injectable()

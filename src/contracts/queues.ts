@@ -6,7 +6,7 @@
  * - `sch.reservationExpiry`: a message held back (SQS `DelaySeconds`) until the payment window of a reservation ends; SNS cannot delay.
  *
  * The owner is the service that consumes the queue and creates it (its `serverless.yml`); everybody else sends through the
- * client of that service (`ScheduleClient`), never by the name.
+ * client of that service (`ScheduleQueueClient`), never by the name.
  */
 export interface QueueSpec {
   /** Namespace of the service that owns (consumes) the queue */

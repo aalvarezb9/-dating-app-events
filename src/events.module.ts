@@ -1,13 +1,13 @@
 import { Module, Global } from '@nestjs/common';
 import { EventPublisher } from './services/event-publisher.service';
 import { QueueSender } from './messaging/queue-sender';
-import { ScheduleClient } from './clients/schedule.client';
+import { ScheduleQueueClient } from './clients/schedule-queue.client';
 import { SharedConfigModule } from './config/shared-config.module';
 
 /**
  * Global Events Module for Dating App
  * Provides everything a service needs to emit: `EventPublisher` (facts on its SNS topic), `QueueSender` (its own queues)
- * and the client of the service whose queues it sends to (`ScheduleClient`; `NotificationClient` is in `NotificationsModule`).
+ * and the client of the service whose queues it sends to (`ScheduleQueueClient`; `NotificationClient` is in `NotificationsModule`).
  *
  * Uses SharedConfigModule for environment configuration.
  *
@@ -27,7 +27,7 @@ import { SharedConfigModule } from './config/shared-config.module';
 @Global()
 @Module({
   imports: [SharedConfigModule],
-  providers: [EventPublisher, QueueSender, ScheduleClient],
-  exports: [EventPublisher, QueueSender, ScheduleClient],
+  providers: [EventPublisher, QueueSender, ScheduleQueueClient],
+  exports: [EventPublisher, QueueSender, ScheduleQueueClient],
 })
 export class EventsModule {}

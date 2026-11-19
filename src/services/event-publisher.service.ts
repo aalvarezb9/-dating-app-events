@@ -18,7 +18,7 @@ import { topicArn } from '../messaging/names';
  *   transaction that caused them commits, and answer 503 or retry when it throws).
  *
  * An order for one queue (`APPOINTMENT_REQUEST_CREATED`, the notification commands) is not published here: it belongs to the
- * client of the service that owns that queue (`ScheduleClient`, `NotificationClient`).
+ * client of the service that owns that queue (`ScheduleQueueClient`, `NotificationClient`).
  *
  * @example
  * ```typescript

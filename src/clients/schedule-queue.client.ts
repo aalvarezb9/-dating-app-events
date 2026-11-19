@@ -11,7 +11,7 @@ import { DomainEvent, DomainEventType } from '../types/events';
  * writes a queue name.
  */
 @Injectable()
-export class ScheduleClient {
+export class ScheduleQueueClient {
   constructor(
     private readonly queues: QueueSender,
     private readonly config: SharedConfigService,

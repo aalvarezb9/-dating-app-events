@@ -68,7 +68,7 @@ export * from './scheduling';
 // Emitting: queue names, SNS/SQS clients and `QueueSender` (the only code that sends to a queue)
 export * from './messaging';
 
-// Clients of the services whose queues others send to (`ScheduleClient`; `NotificationClient` is under notifications)
+// Clients of the services whose queues others send to (`ScheduleQueueClient`; `NotificationClient` is under notifications)
 export * from './clients';
 
 // Projections (local read copies of other services' data) and snapshots

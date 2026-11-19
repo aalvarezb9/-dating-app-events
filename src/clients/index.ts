@@ -1,1 +1,1 @@
-export * from './schedule.client';
+export * from './schedule-queue.client';

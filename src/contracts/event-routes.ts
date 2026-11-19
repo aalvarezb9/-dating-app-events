@@ -9,7 +9,7 @@ export type EventRoute =
   | { kind: 'client'; client: string };
 
 const CLIENT_ROUTES: Partial<Record<DomainEventType, string>> = {
-  [DomainEventType.APPOINTMENT_REQUEST_CREATED]: 'ScheduleClient',
+  [DomainEventType.APPOINTMENT_REQUEST_CREATED]: 'ScheduleQueueClient',
 };
 
 export function routeOf(eventType: DomainEventType): EventRoute {
