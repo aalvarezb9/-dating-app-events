@@ -51,18 +51,10 @@
     },
     "@aws-sdk/lib-dynamodb": {
       "optional": true
-    },
-    "@aws-sdk/client-sns": {
-      "optional": true
-    },
-    "@aws-sdk/client-sqs": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1095.0",
-    "@aws-sdk/client-sns": "^3.1172.0",
-    "@aws-sdk/client-sqs": "^3.1172.0",
     "@aws-sdk/lib-dynamodb": "^3.1095.0",
     "@keyv/redis": "^4.6.0",
     "@nestjs/cache-manager": "^3.0.0",
@@ -86,6 +78,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@aws-sdk/client-sns": "^3.1172.0",
+    "@aws-sdk/client-sqs": "^3.1172.0",
     "@nestjs/axios": "^4.0.1",
     "axios": "^1.19.0",
     "kafkajs": "^2.2.4",
