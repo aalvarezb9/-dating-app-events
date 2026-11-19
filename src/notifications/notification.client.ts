@@ -55,12 +55,13 @@ export function buildNotificationMessage(channel: NotificationChannel, input: No
 /**
  * Orders the notifications service to notify somebody: `notifications.emit(NotificationChannel.EMAIL, {...})`.
  *
- * It publishes a COMMAND to Kafka (one topic per channel) and does not wait for the delivery: the
- * emitter says what and to whom, the notifications service decides how and when, retries and logs.
+ * It publishes a COMMAND on the topic of the service (the event type says the channel: the queue of the notifications service
+ * for that channel is subscribed to it) and does not wait for the delivery: the emitter says what and to whom, the
+ * notifications service decides how and when, retries and logs. Its queue is the retry: a command that fails is delivered again,
+ * and ends in the dead letter queue after the last attempt.
  *
- * It is fire-and-forget by design (it does not go through the outbox): a notification lost because
- * Kafka was down for longer than the producer retries is acceptable; the critical ones have a manual
- * resend (the link of an appointment, the email verification). Therefore:
+ * It is fire-and-forget by design: a notification lost because SNS did not take it is acceptable; the critical ones have a
+ * manual resend (the link of an appointment, the email verification). Therefore:
  * - call it AFTER the transaction that caused it commits (never inside it: a rollback would leave a
  *   notification about something that did not happen);
  * - `emit` never throws: a failed notification must not undo a booking. Use `emitOrThrow` in tests.
@@ -74,7 +75,7 @@ export class NotificationClient {
     private readonly config: SharedConfigService,
   ) {}
 
-  /** Publishes the command. Returns the message sent, or null when it was invalid or Kafka failed (logged). */
+  /** Publishes the command. Returns the message sent, or null when it was invalid or SNS failed (logged). */
   async emit(channel: NotificationChannel, input: NotificationInput): Promise<NotificationMessage | null> {
     try {
       return await this.emitOrThrow(channel, input);
@@ -84,7 +85,7 @@ export class NotificationClient {
     }
   }
 
-  /** Like `emit`, but a problem is an exception (an invalid message, Kafka down) */
+  /** Like `emit`, but a problem is an exception (an invalid message, SNS down) */
   async emitOrThrow(channel: NotificationChannel, input: NotificationInput): Promise<NotificationMessage> {
     const message = buildNotificationMessage(channel, input, this.config.serviceName);
 
@@ -93,7 +94,7 @@ export class NotificationClient {
       throw new Error(`invalid notification: ${problems.join('; ')}`);
     }
 
-    await this.publisher.publishEventOrThrow(notificationEvent(message), notificationPartitionKey(message));
+    await this.publisher.publishEventOrThrow(notificationEvent(message));
     return message;
   }
 }

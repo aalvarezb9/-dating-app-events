@@ -10,7 +10,6 @@ export * from './types/events';
 export * from './services/event-publisher.service';
 
 // Repositories
-export * from './repositories/event-emitting.repository';
 
 // Base Repository System
 export * from './repositories/base/BaseRepository';
@@ -66,8 +65,11 @@ export * from './contracts';
 // Rules of the agenda shared by the services that take and decide bookings (hours, breaks, closures, member agenda)
 export * from './scheduling';
 
-// Transactional outbox (reliable event publication)
-export * from './outbox';
+// Emitting: queue names, SNS/SQS clients and `QueueSender` (the only code that sends to a queue)
+export * from './messaging';
+
+// Clients of the services whose queues others send to (`ScheduleClient`; `NotificationClient` is under notifications)
+export * from './clients';
 
 // Projections (local read copies of other services' data) and snapshots
 export * from './projections';

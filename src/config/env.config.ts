@@ -24,6 +24,19 @@ export interface RedisConfig {
   tls: boolean;
 }
 
+/** Where the topics and queues are: derived names live in `messaging/names.ts`, the only place that builds them */
+export interface MessagingConfig {
+  region: string;
+  /** 12-digit AWS account (the emulator uses 000000000000): part of every topic and queue ARN */
+  accountId: string;
+  /** `local` (emulator), `dev` or `prod`: suffix of every topic and queue name */
+  stage: string;
+  /** Namespace of THIS service (`sch`): its own topic is `<namespace>-events-<stage>` */
+  namespace: string;
+  /** Only locally (the emulator); in AWS the SDK finds the endpoints by itself */
+  endpoint?: string;
+}
+
 export interface AppConfig {
   port: number;
   nodeEnv: string;
@@ -141,6 +154,19 @@ export class SharedConfigService {
       clientId: this.serviceName,
       ssl: this.getFlag('KAFKA_SSL'),
       sasl: this.kafkaSasl(),
+    };
+  }
+
+  /**
+   * SNS / SQS: region, account, stage and namespace. `AWS_ENDPOINT_URL` is set only against the emulator.
+   */
+  get messaging(): MessagingConfig {
+    return {
+      region: this.getRequired('AWS_REGION'),
+      accountId: this.getRequired('AWS_ACCOUNT_ID'),
+      stage: this.getRequired('STAGE'),
+      namespace: this.serviceNamespace,
+      endpoint: this.get('AWS_ENDPOINT_URL') || undefined,
     };
   }
 

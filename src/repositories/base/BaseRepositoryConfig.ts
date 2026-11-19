@@ -114,11 +114,7 @@ export interface BaseRepositoryConfig<DbEntity = any, DomainEntity = any> {
     eventFilter?: EventFilter<DbEntity>;
 
     /**
-     * Extract partition key from entity (for Kafka)
-     * Used to ensure events for same entity go to same partition (ordering)
-     *
-     * @example
-     * eventKeyExtractor: (entity) => entity.tenantId
+     * @deprecated Ignored: SNS has no partitions. Kept only so repositories that still set it compile; remove it from them.
      */
     eventKeyExtractor?: (entity: DbEntity, operation: RepositoryOperation) => string;
 

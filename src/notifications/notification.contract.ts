@@ -22,7 +22,7 @@ export const DELIVERY_CHANNELS = [
 
 export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
 
-/** One Kafka topic per channel: a slow email provider must not hold back the in-app notifications */
+/** The event type of the command of each channel: the notifications service subscribes one queue per channel (a slow email provider must not hold back the others) */
 export const NOTIFICATION_TOPICS: Record<NotificationChannel, DomainEventType> = {
   [NotificationChannel.EMAIL]: DomainEventType.NOTIFICATION_EMAIL,
   [NotificationChannel.PUSH]: DomainEventType.NOTIFICATION_PUSH,

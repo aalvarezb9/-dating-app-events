@@ -1,212 +1,74 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
+import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { randomUUID } from 'crypto';
 import { DomainEvent, DomainEventType } from '../types/events';
 import { SharedConfigService } from '../config/env.config';
-import { kafkaClientConnection } from '../config/connections';
-import { randomUUID } from 'crypto';
-import { lastValueFrom } from 'rxjs';
+import { routeOf } from '../contracts/event-routes';
+import { MAX_MESSAGE_BYTES, createSnsClient } from '../messaging/aws-clients';
+import { topicArn } from '../messaging/names';
 
 /**
- * Event Publisher Service - Kafka Transport (Fire-and-Forget)
+ * Event Publisher: announces a fact on the SNS topic of the service (`<namespace>-events-<stage>`).
  *
- * Publishes domain events using NestJS Microservices with Kafka transport.
- * Uses partition keys to guarantee ordering of events for the same entity.
+ * Whoever cares subscribes a queue to that topic (the filter is the `eventType` attribute); the publisher does not know them.
+ * The two methods are the same publication with different guarantees:
+ * - `publishEvent` never throws: a failure is logged and the caller goes on. It is what `BaseRepository` uses for the events of
+ *   its `events` configuration, and what a fact nobody depends on should use.
+ * - `publishEventOrThrow` throws when the event could not be published, for the facts that must not be lost (call it AFTER the
+ *   transaction that caused them commits, and answer 503 or retry when it throws).
  *
- * Key Features:
- * - Fire-and-forget: Events are emitted without waiting for confirmation
- * - Partition keys: Events with same key go to same partition (ordering guaranteed)
- * - Auto-create topics (no manual registration required)
- * - Consumer groups for horizontal scaling
- *
- * Partition Strategy:
- * - Key = aggregateId (tenantId, userId, etc.)
- * - All events for same tenant/user → same partition → ordered processing
+ * An order for one queue (`APPOINTMENT_REQUEST_CREATED`, the notification commands) is not published here: it belongs to the
+ * client of the service that owns that queue (`ScheduleClient`, `NotificationClient`).
  *
  * @example
  * ```typescript
- * @Injectable()
- * export class SubdomainRepository extends BaseRepository {
- *   constructor(eventPublisher: EventPublisher) {
- *     super(adapter, eventPublisher, {
- *       events: {
- *         publishOnCreate: true,
- *         eventKeyExtractor: (entity) => entity.tenantId,
- *       },
- *     });
- *   }
- * }
+ * await this.events.publishEventOrThrow(
+ *   this.events.createEvent(DomainEventType.EMAIL_VERIFIED, user.id, 'User', data, user.id, user.tenantId),
+ * );
  * ```
  */
 @Injectable()
-export class EventPublisher implements OnModuleInit, OnModuleDestroy {
-  private client: ClientProxy;
+export class EventPublisher implements OnModuleDestroy {
   private readonly logger = new Logger(EventPublisher.name);
-  private isConnected = false;
-  private connectionPromise: Promise<void> | null = null;
+  private snsClient?: SNSClient;
 
-  constructor(private config: SharedConfigService) {
-    const kafkaConfig = this.config.kafka;
+  constructor(private config: SharedConfigService) {}
 
-    this.client = ClientProxyFactory.create({
-      transport: Transport.KAFKA,
-      options: {
-        client: {
-          clientId: kafkaConfig.clientId,
-          ...kafkaClientConnection(kafkaConfig),
-          retry: {
-            retries: 5,
-            initialRetryTime: 300,
-            maxRetryTime: 30000,
-          },
-        },
-        producer: {
-          allowAutoTopicCreation: true,
-          idempotent: true,
-          maxInFlightRequests: 5,
-          retry: {
-            retries: 5,
-            initialRetryTime: 300,
-          },
-        },
-      },
-    }) as unknown as ClientProxy;
-
-    this.logger.log(
-      `EventPublisher initialized with Kafka brokers: ${kafkaConfig.brokers.join(', ')} (clientId: ${kafkaConfig.clientId})`
-    );
-  }
-
-  /**
-   * OnModuleInit lifecycle hook
-   * Ensures Kafka connection is established before the module is ready
-   */
-  async onModuleInit() {
-    await this.connect();
-  }
-
-  /**
-   * Connect to Kafka
-   * Called automatically on module initialization
-   */
-  private async connect(): Promise<void> {
-    if (this.connectionPromise) {
-      return this.connectionPromise;
-    }
-
-    this.connectionPromise = (async () => {
-      try {
-        await this.client.connect();
-        this.isConnected = true;
-        this.logger.log('EventPublisher connected to Kafka successfully');
-      } catch (error: any) {
-        this.isConnected = false;
-        this.logger.error(`Failed to connect to Kafka: ${error?.message}`);
-        // Don't throw - allow service to start even if Kafka is temporarily unavailable
-      }
-    })();
-
-    return this.connectionPromise;
-  }
-
-  /**
-   * Publish a single domain event with partition key (Fire-and-Forget)
-   *
-   * The partition key ensures that all events for the same entity (aggregateId)
-   * go to the same partition, guaranteeing ordered processing.
-   *
-   * @param event - Domain event to publish
-   * @param partitionKey - Optional partition key (defaults to aggregateId)
-   */
-  async publishEvent(event: DomainEvent, partitionKey?: string): Promise<void> {
+  /** Publishes the event; never throws (a failure is logged) */
+  async publishEvent(event: DomainEvent): Promise<void> {
     try {
-      const completeEvent = {
-        ...event,
-        eventId: event.eventId || randomUUID(),
-        timestamp: event.timestamp || new Date(),
-      };
-
-      // Use aggregateId as default partition key (tenant, user, etc.)
-      const key = partitionKey || event.aggregateId || event.tenantId || randomUUID();
-
-      // Emit to Kafka with partition key
-      // Wrap in try-catch and use lastValueFrom for proper error handling
-      try {
-        await lastValueFrom(
-          this.client.emit(event.eventType, {
-            value: completeEvent,
-            key: key,
-          })
-        );
-
-        this.logger.debug(
-          `Event emitted to Kafka: ${event.eventType} (id: ${completeEvent.eventId}, key: ${key})`
-        );
-      } catch (emitError: any) {
-        this.logger.error(
-          `Failed to emit event to Kafka: ${emitError?.message}`,
-          emitError.stack
-        );
-        // Don't throw - fire-and-forget semantics
-      }
+      await this.publishEventOrThrow(event);
     } catch (error: any) {
-      this.logger.error(
-        `Failed to prepare event ${event.eventType}: ${error?.message}`,
-        error.stack
-      );
+      this.logger.error(`Event ${event?.eventType} was not published: ${error?.message}`, error?.stack);
     }
   }
 
-  /**
-   * Publish one event and FAIL if it could not be delivered to Kafka.
-   *
-   * publishEvent() swallows delivery errors (fire-and-forget). The outbox relay needs to know
-   * whether the event really left, so it retries the ones that did not.
-   */
-  async publishEventOrThrow(event: DomainEvent, partitionKey?: string): Promise<void> {
-    const completeEvent = {
+  /** Publishes the event and throws if it could not be published */
+  async publishEventOrThrow(event: DomainEvent): Promise<void> {
+    const route = routeOf(event.eventType);
+    if (route.kind === 'client') {
+      throw new Error(`${event.eventType} is an order for a queue: send it with ${route.client}, not with the EventPublisher`);
+    }
+
+    const complete: DomainEvent = {
       ...event,
       eventId: event.eventId || randomUUID(),
       timestamp: event.timestamp || new Date(),
     };
-    const key = partitionKey || event.aggregateId || event.tenantId || randomUUID();
-
-    await lastValueFrom(this.client.emit(event.eventType, { value: completeEvent, key }));
-    this.logger.debug(`Event emitted to Kafka: ${event.eventType} (id: ${completeEvent.eventId}, key: ${key})`);
-  }
-
-  /**
-   * Publish multiple domain events in batch (Fire-and-Forget)
-   *
-   * @param events - Array of domain events
-   */
-  async publishEventsBatch(events: DomainEvent[]): Promise<void> {
-    if (events.length === 0) {
-      return;
+    const message = JSON.stringify(complete);
+    if (Buffer.byteLength(message) > MAX_MESSAGE_BYTES) {
+      throw new Error(`Event ${event.eventType} is too large (${Buffer.byteLength(message)} bytes)`);
     }
 
-    try {
-      for (const event of events) {
-        await this.publishEvent(event);
-      }
-
-      this.logger.debug(`Batch of ${events.length} events emitted`);
-    } catch (error: any) {
-      this.logger.error(`Failed to emit event batch: ${error?.message}`, error.stack);
-    }
-  }
-
-  /**
-   * Alias for publishEvent (for backward compatibility)
-   */
-  async publishToTopic(event: DomainEvent): Promise<void> {
-    return this.publishEvent(event);
-  }
-
-  /**
-   * Alias for publishEvent (for backward compatibility)
-   */
-  async publishEventAndQueue(event: DomainEvent): Promise<void> {
-    return this.publishEvent(event);
+    const messaging = this.config.messaging;
+    await this.client().send(
+      new PublishCommand({
+        TopicArn: topicArn(messaging, messaging.namespace),
+        Message: message,
+        MessageAttributes: { eventType: { DataType: 'String', StringValue: event.eventType } },
+      }),
+    );
+    this.logger.debug(`Event published: ${event.eventType} (id: ${complete.eventId})`);
   }
 
   /**
@@ -245,23 +107,12 @@ export class EventPublisher implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  /**
-   * Check if the client is connected to Redis
-   */
-  isClientConnected(): boolean {
-    return this.isConnected;
+  onModuleDestroy() {
+    this.snsClient?.destroy();
   }
 
-  /**
-   * Cleanup on module destruction
-   */
-  async onModuleDestroy() {
-    try {
-      await this.client.close();
-      this.isConnected = false;
-      this.logger.log('EventPublisher disconnected from Kafka');
-    } catch (error: any) {
-      this.logger.error(`Error closing Kafka connection: ${error?.message}`);
-    }
+  private client(): SNSClient {
+    this.snsClient ??= createSnsClient(this.config.messaging);
+    return this.snsClient;
   }
 }
