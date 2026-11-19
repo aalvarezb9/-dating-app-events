@@ -72,13 +72,25 @@ const logger = new Logger('consume');
 export function routesOf(consumer: Type<unknown>): Map<string, Array<{ method: string; call: (instance: any, payload: unknown, context: QueueMessageContext) => Promise<unknown> }>> {
   const routes = new Map<string, Array<{ method: string; call: (instance: any, payload: unknown, context: QueueMessageContext) => Promise<unknown> }>>();
 
-  for (const method of Object.getOwnPropertyNames(consumer.prototype)) {
+  // The class and the ones it extends (a consumer may inherit its handler); a method redefined below hides the one above
+  const seen = new Set<string>();
+  const methods: Array<{ method: string; owner: Function }> = [];
+  for (let proto = consumer.prototype; proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
+    for (const method of Object.getOwnPropertyNames(proto)) {
+      if (method !== 'constructor' && !seen.has(method)) {
+        seen.add(method);
+        methods.push({ method, owner: proto.constructor });
+      }
+    }
+  }
+
+  for (const { method, owner } of methods) {
     const fn = (consumer.prototype as any)[method];
     const patterns: unknown[] | undefined = typeof fn === 'function' ? Reflect.getMetadata(PATTERN_METADATA, fn) : undefined;
     if (!patterns) continue;
 
-    // Where `@Payload()` and `@Ctx()` sit in the signature (Nest stores them as "<paramtype>:<index>")
-    const declared: Record<string, unknown> = Reflect.getMetadata(ROUTE_ARGS_METADATA, consumer, method) ?? {};
+    // Where `@Payload()` and `@Ctx()` sit in the signature (Nest stores them as "<paramtype>:<index>" on the class that declares the method)
+    const declared: Record<string, unknown> = Reflect.getMetadata(ROUTE_ARGS_METADATA, owner, method) ?? {};
     let payloadAt = 0;
     let contextAt = 1;
     for (const key of Object.keys(declared)) {
