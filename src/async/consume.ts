@@ -125,14 +125,9 @@ function eventOf(record: SqsRecordLike): any {
 }
 
 export function consume(appModule: Type<unknown>, consumer: Type<unknown>) {
-  const routes = routesOf(consumer);
-  if (routes.size === 0) {
-    throw new Error(`${consumer.name} has no @EventPattern: there is nothing for consume() to call`);
-  }
-
   let app: Promise<INestApplicationContext> | undefined;
 
-  const context = (): Promise<INestApplicationContext> => {
+  return handlerOf(consumer, (): Promise<INestApplicationContext> => {
     if (!app) {
       RuntimeInfo.markServerless();
       app = NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }).catch((error) => {
@@ -141,7 +136,23 @@ export function consume(appModule: Type<unknown>, consumer: Type<unknown>) {
       });
     }
     return app;
-  };
+  });
+}
+
+/**
+ * The same handler as `consume`, over an application that is already running: the container of a service in local development,
+ * where the local runner reads the queues and calls it. It starts nothing and does NOT mark the process as serverless, so the
+ * timers and startup tasks of the container keep working as they always did.
+ */
+export function consumeFrom(context: INestApplicationContext, consumer: Type<unknown>) {
+  return handlerOf(consumer, () => Promise.resolve(context));
+}
+
+function handlerOf(consumer: Type<unknown>, context: () => Promise<INestApplicationContext>) {
+  const routes = routesOf(consumer);
+  if (routes.size === 0) {
+    throw new Error(`${consumer.name} has no @EventPattern: there is nothing for consume() to call`);
+  }
 
   return async (sqsEvent: SqsEventLike, lambdaContext?: LambdaContextLike): Promise<SqsBatchResponse> => {
     const instance = (await context()).get(consumer, { strict: false });
