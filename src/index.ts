@@ -78,6 +78,9 @@ export * from './async';
 // Serving HTTP in Lambda: `createHttpHandler(AppModule, configureApp)` is the entry of the function behind API Gateway
 export * from './lambda';
 
+// Whether the process is a serverless function: the services leave out their startup tasks and timers when it is
+export * from './runtime';
+
 // Projections (local read copies of other services' data) and snapshots
 export * from './projections';
 

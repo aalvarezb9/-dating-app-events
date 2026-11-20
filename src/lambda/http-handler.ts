@@ -1,6 +1,7 @@
 import { INestApplication, Type } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import serverlessExpress from '@codegenie/serverless-express';
+import { RuntimeInfo } from '../runtime/runtime-info';
 
 /**
  * The entry of the Lambda that serves the HTTP API of a service: `export const http = createHttpHandler(AppModule, configureApp);`
@@ -27,6 +28,7 @@ export function createHttpHandler(appModule: Type<unknown>, configure?: Configur
   let handler: Promise<LambdaHandler> | undefined;
 
   const boot = async (): Promise<LambdaHandler> => {
+    RuntimeInfo.markServerless(); // before Nest starts: the startup tasks of the services read it
     const app = await NestFactory.create(appModule, { logger: ['error', 'warn'] });
     await configure?.(app, { lambda: true });
     await app.init();

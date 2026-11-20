@@ -4,6 +4,7 @@ import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { NestFactory } from '@nestjs/core';
 import { PATTERN_METADATA } from '@nestjs/microservices/constants';
 import { RpcParamtype } from '@nestjs/microservices/enums/rpc-paramtype.enum';
+import { RuntimeInfo } from '../runtime/runtime-info';
 
 /**
  * The entry of a Lambda that reads an SQS queue: `export const processCatalog = consume(AppModule, CatalogProjectionConsumer);`
@@ -132,10 +133,13 @@ export function consume(appModule: Type<unknown>, consumer: Type<unknown>) {
   let app: Promise<INestApplicationContext> | undefined;
 
   const context = (): Promise<INestApplicationContext> => {
-    app ??= NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }).catch((error) => {
-      app = undefined; // a failed start is not kept: the next invocation tries again
-      throw error;
-    });
+    if (!app) {
+      RuntimeInfo.markServerless();
+      app = NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }).catch((error) => {
+        app = undefined; // a failed start is not kept: the next invocation tries again
+        throw error;
+      });
+    }
     return app;
   };
 
