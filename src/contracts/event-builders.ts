@@ -13,7 +13,7 @@ export function sourceVersionOf(row: { modifiedAt?: Date | string | null; create
 
 /**
  * Event that carries the full state of one row (*_UPSERTED / *_DELETED): the aggregate id is
- * the row id, so every change of one row is ordered inside its Kafka partition.
+ * the row id (consumers apply a change only if its `sourceVersion` is newer, so delivery order does not matter).
  *
  * @param source name of the publishing service (SharedConfigService.serviceName)
  */

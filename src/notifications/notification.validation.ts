@@ -49,8 +49,8 @@ export function channelsFor(message: Pick<NotificationMessage, 'recipient' | 'ch
 
 /**
  * Everything that must be true for the notifications service to be able to deliver the message.
- * Pure (no Nest, no Kafka) so the emitter checks it before publishing and the service checks it again
- * when consuming: nothing coming from Kafka is trusted.
+ * Pure (no Nest, no AWS) so the emitter checks it before publishing and the service checks it again
+ * when consuming: nothing coming from a queue is trusted.
  *
  * @returns the problems found; empty when the message is valid
  */

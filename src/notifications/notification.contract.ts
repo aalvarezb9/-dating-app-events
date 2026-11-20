@@ -93,7 +93,7 @@ export interface NotificationSignal {
 }
 
 /**
- * The command published to Kafka. Exactly one of `template`, `raw` and `signal` carries the content: a template
+ * The command published to the topic of the emitting service. Exactly one of `template`, `raw` and `signal` carries the content: a template
  * or raw text goes to a person (email…), a signal goes to the SSE channel and reaches whoever listens to its topic.
  *
  * `sensitiveFields` lists dotted paths inside the message (`template.data.link`) that are secrets:

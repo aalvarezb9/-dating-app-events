@@ -22,7 +22,7 @@ export class SseService {
 
   constructor(private readonly notifications: NotificationClient) {}
 
-  /** @returns true when Kafka took the signal */
+  /** @returns true when the command was published (the signal is not guaranteed to reach anybody) */
   async emit(topic: string, data: Record<string, unknown>): Promise<boolean> {
     const problem = validateTopic(topic);
     if (problem) {
@@ -33,7 +33,7 @@ export class SseService {
     return sent !== null;
   }
 
-  /** The same signal for several topics (an appointment that touches two days). @returns how many Kafka took */
+  /** The same signal for several topics (an appointment that touches two days). @returns how many were published */
   async emitMany(topics: string[], data: Record<string, unknown>): Promise<number> {
     const results = await Promise.all([...new Set(topics)].map((topic) => this.emit(topic, data)));
     return results.filter(Boolean).length;

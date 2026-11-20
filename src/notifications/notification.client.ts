@@ -36,7 +36,7 @@ export type NotificationInput = {
   | { signal: NotificationSignal; template?: never; raw?: never }
 );
 
-/** Builds the message of an emit: adds the id, the time and the sender. Pure, so it can be tested without Kafka. */
+/** Builds the message of an emit: adds the id, the time and the sender. Pure, so it can be tested without AWS. */
 export function buildNotificationMessage(channel: NotificationChannel, input: NotificationInput, source: string): NotificationMessage {
   const { id, template, raw, signal, recipient, ...rest } = input;
   return {
@@ -99,7 +99,7 @@ export class NotificationClient {
   }
 }
 
-/** The Kafka event that carries a notification command (the topic is the event type: one per channel) */
+/** The event that carries a notification command (its `eventType` is the channel: the queue of each channel filters by it) */
 export function notificationEvent(message: NotificationMessage): DomainEvent {
   return {
     eventType: NOTIFICATION_TOPICS[message.channel],
