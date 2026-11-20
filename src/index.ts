@@ -58,6 +58,7 @@ export * from './database/transaction-manager';
 export * from './database/advisory-lock-manager';
 export * from './database/prefix-search-indexes';
 export * from './database/entities';
+export * from './database/entities-contract';
 
 // Contracts between services (events, projections, requests)
 export * from './contracts';
