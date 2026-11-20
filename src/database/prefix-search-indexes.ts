@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DataSource, EntityTarget } from 'typeorm';
+import { RuntimeInfo } from '../runtime/runtime-info';
 
 /** A column that is searched by the start of its text */
 export interface PrefixIndexedColumn {
@@ -19,6 +20,10 @@ const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
  * an index and not a read of the table: `CREATE INDEX … ON table (lower(column) text_pattern_ops)`. TypeORM cannot
  * declare an expression index with an operator class, so they are created here. When a service has migrations this
  * SQL belongs in one of them.
+ *
+ * In a Lambda (`RuntimeInfo.isServerless`) it does NOT run at startup: that would be DDL on every cold start, in parallel between
+ * instances. The service exposes `ensure()` as a function (`runTask(AppModule, SearchIndexesService, 'ensure')`) that is invoked once
+ * after each deploy, once the migrations have run.
  *
  * Extend it in the service, name the entity and the columns, and register the class as a provider:
  *
@@ -41,6 +46,14 @@ export abstract class PrefixSearchIndexes implements OnModuleInit {
   constructor(protected readonly dataSource: DataSource) {}
 
   async onModuleInit(): Promise<void> {
+    if (RuntimeInfo.isServerless) {
+      return;
+    }
+    await this.ensure();
+  }
+
+  /** Creates the indexes that are missing; safe to repeat */
+  async ensure(): Promise<void> {
     const table = this.dataSource.getMetadata(this.entity).tableName;
 
     for (const { column, lowercase = true } of this.columns) {
