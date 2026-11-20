@@ -74,6 +74,9 @@ export * from './clients';
 // Receiving: `consume(AppModule, Consumer)` is the entry of a Lambda that reads an SQS queue and calls the @EventPattern methods
 export * from './async';
 
+// Serving HTTP in Lambda: `createHttpHandler(AppModule, configureApp)` is the entry of the function behind API Gateway
+export * from './lambda';
+
 // Projections (local read copies of other services' data) and snapshots
 export * from './projections';
 
