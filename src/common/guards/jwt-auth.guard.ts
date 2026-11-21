@@ -11,7 +11,7 @@ import { IS_INTERNAL_API_KEY } from '../decorators/internal-api.decorator';
 import { FORBIDDEN_IN_SUPPORT_SESSION, SAFE_HTTP_METHODS } from '../../auth/support-session';
 
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('supabase-jwt') {
+export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(private reflector: Reflector) {
     super();
   }

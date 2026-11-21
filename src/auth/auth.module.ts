@@ -3,8 +3,10 @@ import { PassportModule } from '@nestjs/passport';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { TenantBlockCache } from './tenant-block';
 import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
+import { CognitoJwtStrategy } from './strategies/cognito-jwt.strategy';
 import { AuthService } from './auth-service.interface';
 import { SupabaseAuthStrategy } from './strategies/supabase-auth.strategy';
+import { CognitoAuthStrategy } from './strategies/cognito-auth.strategy';
 import { SharedConfigModule } from '../config/shared-config.module';
 import { SharedConfigService } from '../config/env.config';
 
@@ -15,8 +17,10 @@ import { SharedConfigService } from '../config/env.config';
  * The actual strategy is determined at runtime based on AUTH_PROVIDER env var.
  *
  * Supported providers:
- * - 'supabase' (default): SupabaseAuthStrategy
- * - 'cognito' (future): CognitoAuthStrategy
+ * - 'cognito': CognitoAuthStrategy + CognitoJwtStrategy (which also verifies the tokens of the support sessions)
+ * - 'supabase' (default for now): SupabaseAuthStrategy + SupabaseJwtStrategy (the original one, being retired)
+ *
+ * Whatever the provider, the JWT strategy is registered in passport as `jwt`, the name `JwtAuthGuard` asks for.
  *
  * To add a new provider:
  * 1. Create strategy class extending AuthService
@@ -38,7 +42,7 @@ import { SharedConfigService } from '../config/env.config';
 @Global()
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'supabase-jwt' }),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
     SharedConfigModule,
   ],
   providers: [
@@ -50,19 +54,13 @@ import { SharedConfigService } from '../config/env.config';
         switch (provider) {
           case 'supabase':
             return new SupabaseJwtStrategy(config, cache);
-          // Future providers:
-          // case 'cognito':
-          //   return new CognitoJwtStrategy(config);
+          case 'cognito':
+            return new CognitoJwtStrategy(config, cache);
           default:
             throw new Error(`Unknown auth provider for JWT: ${provider}`);
         }
       },
       // The cache is optional: it holds the block flags of the tenants (RedisCacheModule, global)
-      inject: [SharedConfigService, { token: CACHE_MANAGER, optional: true }],
-    },
-    {
-      provide: SupabaseJwtStrategy, // Keep for backward compatibility
-      useFactory: (config: SharedConfigService, cache?: TenantBlockCache) => new SupabaseJwtStrategy(config, cache),
       inject: [SharedConfigService, { token: CACHE_MANAGER, optional: true }],
     },
     {
@@ -73,9 +71,8 @@ import { SharedConfigService } from '../config/env.config';
         switch (provider) {
           case 'supabase':
             return new SupabaseAuthStrategy(config);
-          // Future providers:
-          // case 'cognito':
-          //   return new CognitoAuthStrategy(config);
+          case 'cognito':
+            return new CognitoAuthStrategy(config);
           default:
             throw new Error(`Unknown auth provider: ${provider}`);
         }
@@ -83,6 +80,6 @@ import { SharedConfigService } from '../config/env.config';
       inject: [SharedConfigService],
     },
   ],
-  exports: [SupabaseJwtStrategy, AuthService, PassportModule],
+  exports: ['JWT_STRATEGY', AuthService, PassportModule],
 })
 export class AuthModule {}

@@ -51,7 +51,7 @@ const USER_CHECK_CACHE_MAX_ENTRIES = 10_000;
  * ```
  */
 @Injectable()
-export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'supabase-jwt') {
+export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   private supabase: SupabaseClient;
 
   /**

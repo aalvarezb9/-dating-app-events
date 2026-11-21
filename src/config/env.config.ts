@@ -14,6 +14,22 @@ export interface SupabaseConfig {
   storageUrl: string;
 }
 
+/** The User Pool of Cognito that identifies the people of the platform (only `auth` has permission on it; the rest verify tokens) */
+export interface CognitoConfig {
+  region: string;
+  userPoolId: string;
+  /** The app client: only the admin password flow and the refresh flow are enabled (nobody can ask the provider for a token directly) */
+  clientId: string;
+  /** Optional: a refresh with a secret needs the user to compute the hash, which the contract of `refreshToken` does not carry */
+  clientSecret?: string;
+  /** `iss` of its tokens: `https://cognito-idp.<region>.amazonaws.com/<pool>` in AWS, what the emulator reports locally */
+  issuer: string;
+  /** Where the public keys are: `<issuer>/.well-known/jwks.json` */
+  jwksUrl: string;
+  /** Only locally (the emulator); in AWS the SDK finds the endpoint by itself */
+  endpoint?: string;
+}
+
 export interface RedisConfig {
   host: string;
   port: number;
@@ -94,6 +110,30 @@ export class SharedConfigService {
       jwtSecret: this.getRequired('SUPABASE_JWT_SECRET'),
       storageUrl: this.getRequired('SUPABASE_STORAGE_URL'),
     };
+  }
+
+  /**
+   * Cognito (AUTH_PROVIDER=cognito). `COGNITO_ISSUER` and `COGNITO_JWKS_URL` are only set when they are not the ones of AWS (the emulator
+   * reports its own address as the issuer); without them they are derived from the region and the pool.
+   */
+  get cognito(): CognitoConfig {
+    const region = this.getRequired('AWS_REGION');
+    const userPoolId = this.getRequired('COGNITO_USER_POOL_ID');
+    const issuer = this.get('COGNITO_ISSUER') || `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`;
+    return {
+      region,
+      userPoolId,
+      clientId: this.getRequired('COGNITO_CLIENT_ID'),
+      clientSecret: this.get('COGNITO_CLIENT_SECRET') || undefined,
+      issuer,
+      jwksUrl: this.get('COGNITO_JWKS_URL') || `${issuer}/.well-known/jwks.json`,
+      endpoint: this.get('AWS_ENDPOINT_URL') || undefined,
+    };
+  }
+
+  /** Secret with which `auth` signs the tokens of a support session (HS256); no other token is verified with it */
+  get supportTokenSecret(): string {
+    return this.getRequired('SUPPORT_TOKEN_SECRET');
   }
 
   /**

@@ -126,6 +126,16 @@ export abstract class AuthService {
   abstract getUserById(userId: string): Promise<AuthUser | null>;
 
   /**
+   * Finish a password reset with the code the provider sent to the person's email
+   *
+   * @param email - User email
+   * @param code - The code from the email
+   * @param newPassword - The new password
+   * @throws BadRequestException when the code is wrong or expired
+   */
+  abstract confirmPasswordReset(email: string, code: string, newPassword: string): Promise<void>;
+
+  /**
    * Send password reset email
    *
    * @param email - User email

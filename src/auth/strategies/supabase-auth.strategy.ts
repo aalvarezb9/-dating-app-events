@@ -250,6 +250,11 @@ export class SupabaseAuthStrategy extends AuthService {
     }
   }
 
+  /** Supabase resets the password with a link, not a code: only the Cognito provider supports this operation */
+  async confirmPasswordReset(): Promise<void> {
+    throw new BadRequestException('Password reset by code is not supported by this provider');
+  }
+
   async verifyUserEmail(userId: string): Promise<void> {
     try {
       const { error } = await this.supabase.auth.admin.updateUserById(userId, {
