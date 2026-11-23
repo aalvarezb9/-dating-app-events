@@ -84,7 +84,7 @@
     "@codegenie/serverless-express": "^5.0.0",
     "@nestjs/axios": "^4.0.1",
     "axios": "^1.19.0",
-    "jose": "^6.2.18",
+    "jose": "^5.10.0",
     "passport-strategy": "^1.0.0",
     "rxjs": "^7.8.2",
     "sanitize-html": "^2.17.7"
