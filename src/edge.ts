@@ -25,6 +25,9 @@ export * from './auth/tenant-block';
 export * from './auth/admin-session';
 export * from './auth/support-session';
 
+// The verifier of access tokens (Cognito and support sessions): `jose` only, no Passport nor AWS SDK
+export * from './auth/token-verifier';
+
 // Logs without secrets, and the shape of an error
 export * from './common/utils/redact';
 export * from './common/filters/all-exceptions.filter';
