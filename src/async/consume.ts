@@ -4,6 +4,7 @@ import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { NestFactory } from '@nestjs/core';
 import { PATTERN_METADATA } from '@nestjs/microservices/constants';
 import { RpcParamtype } from '@nestjs/microservices/enums/rpc-paramtype.enum';
+import { loadSecrets } from '../config/load-secrets';
 import { RuntimeInfo } from '../runtime/runtime-info';
 
 /**
@@ -130,10 +131,12 @@ export function consume(appModule: Type<unknown>, consumer: Type<unknown>) {
   return handlerOf(consumer, (): Promise<INestApplicationContext> => {
     if (!app) {
       RuntimeInfo.markServerless();
-      app = NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }).catch((error) => {
-        app = undefined; // a failed start is not kept: the next invocation tries again
-        throw error;
-      });
+      app = loadSecrets()
+        .then(() => NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }))
+        .catch((error) => {
+          app = undefined; // a failed start is not kept: the next invocation tries again
+          throw error;
+        });
     }
     return app;
   });

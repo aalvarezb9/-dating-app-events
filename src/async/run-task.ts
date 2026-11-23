@@ -1,5 +1,6 @@
 import { INestApplicationContext, Logger, Type } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { loadSecrets } from '../config/load-secrets';
 import { RuntimeInfo } from '../runtime/runtime-info';
 
 /**
@@ -17,10 +18,12 @@ export function runTask<T>(appModule: Type<unknown>, service: Type<T>, method: k
   const context = (): Promise<INestApplicationContext> => {
     if (!app) {
       RuntimeInfo.markServerless();
-      app = NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }).catch((error) => {
-        app = undefined; // a failed start is not kept: the next invocation tries again
-        throw error;
-      });
+      app = loadSecrets()
+        .then(() => NestFactory.createApplicationContext(appModule, { logger: ['error', 'warn'] }))
+        .catch((error) => {
+          app = undefined; // a failed start is not kept: the next invocation tries again
+          throw error;
+        });
     }
     return app;
   };

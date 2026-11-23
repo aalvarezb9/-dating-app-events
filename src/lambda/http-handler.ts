@@ -1,6 +1,7 @@
 import { INestApplication, Type } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import serverlessExpress from '@codegenie/serverless-express';
+import { loadSecrets } from '../config/load-secrets';
 import { RuntimeInfo } from '../runtime/runtime-info';
 
 /**
@@ -29,6 +30,7 @@ export function createHttpHandler(appModule: Type<unknown>, configure?: Configur
 
   const boot = async (): Promise<LambdaHandler> => {
     RuntimeInfo.markServerless(); // before Nest starts: the startup tasks of the services read it
+    await loadSecrets(); // the secrets of Secrets Manager (SECRETS_IDS) become variables before the configuration is read
     const app = await NestFactory.create(appModule, { logger: ['error', 'warn'] });
     await configure?.(app, { lambda: true });
     await app.init();
