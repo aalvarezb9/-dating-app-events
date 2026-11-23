@@ -153,9 +153,15 @@ export class SharedConfigService {
    * App configuration
    */
   get app(): AppConfig {
+    const nodeEnv = this.getRequired('NODE_ENV');
+    // Without checking certificates anybody in the middle could pass for the identity provider or for a service: only the local
+    // environment (whose emulator has a certificate for `localhost` only) and the tests may switch it off
+    if (this.get('NODE_TLS_REJECT_UNAUTHORIZED') === '0' && !['local', 'test'].includes(nodeEnv)) {
+      throw new Error(`NODE_TLS_REJECT_UNAUTHORIZED=0 is only allowed with NODE_ENV=local or test (NODE_ENV is "${nodeEnv}")`);
+    }
     return {
       port: parseInt(this.getRequired('PORT')),
-      nodeEnv: this.getRequired('NODE_ENV'),
+      nodeEnv,
       baseDomain: this.getRequired('BASE_DOMAIN'),
     };
   }
