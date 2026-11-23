@@ -39,6 +39,8 @@ import { SharedConfigService } from './env.config';
       envFilePath: [
         `.env.${process.env.NODE_ENV}`,
         '.env',
+        // Values that only exist once the infrastructure is deployed (the ids of the local User Pool); a file that is not there is skipped
+        ...(process.env.EXTRA_ENV_FILE ? [process.env.EXTRA_ENV_FILE] : []),
       ],
       cache: true,
     }),
