@@ -1,15 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SharedConfigService } from '../../config/env.config';
-import { FileStorageService, FileUploadResult, ListFilesOptions, UploadFileOptions } from '../file-storage.interface';
+import {
+  FileStorageService,
+  FileUploadResult,
+  ListFilesOptions,
+  UploadFileOptions,
+  UploadTicket,
+  UploadTicketOptions,
+} from '../file-storage.interface';
 
 /** S3 deletes at most this many keys per request */
 const DELETE_BATCH = 1000;
@@ -81,6 +91,48 @@ export class S3StorageStrategy extends FileStorageService {
 
   async getSignedUrl(bucket: string, filePath: string, expiresIn: number = 3600): Promise<string> {
     return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucketOf(bucket), Key: filePath }), { expiresIn });
+  }
+
+  async createUploadTicket(bucket: string, filePath: string, options: UploadTicketOptions): Promise<UploadTicket> {
+    const { url, fields } = await createPresignedPost(this.client, {
+      Bucket: this.bucketOf(bucket),
+      Key: filePath,
+      Expires: options.expiresIn,
+      Fields: { 'Content-Type': options.contentType },
+      // The storage refuses what does not match: the exact key, the declared type and a size between 1 byte and the limit
+      Conditions: [['content-length-range', 1, options.maxBytes], ['eq', '$Content-Type', options.contentType], ['eq', '$key', filePath]],
+    });
+    return { url, fields, expiresAt: new Date(Date.now() + options.expiresIn * 1000) };
+  }
+
+  async getFileSize(bucket: string, filePath: string): Promise<number | null> {
+    try {
+      const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucketOf(bucket), Key: filePath }));
+      return head.ContentLength ?? 0;
+    } catch (error: any) {
+      if (error?.name === 'NotFound' || error?.name === 'NoSuchKey' || error?.$metadata?.httpStatusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async readHead(bucket: string, filePath: string, bytes: number): Promise<Buffer> {
+    const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucketOf(bucket), Key: filePath, Range: `bytes=0-${bytes - 1}` }));
+    return Buffer.from(await response.Body!.transformToByteArray());
+  }
+
+  async copyFile(bucket: string, fromPath: string, toPath: string, options?: { contentType?: string }): Promise<void> {
+    const real = this.bucketOf(bucket);
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: real,
+        Key: toPath,
+        // Keys go URL-encoded in the source: a name with special characters would not be found otherwise
+        CopySource: `${real}/${fromPath.split('/').map(encodeURIComponent).join('/')}`,
+        ...(options?.contentType ? { ContentType: options.contentType, MetadataDirective: 'REPLACE' as const } : {}),
+      }),
+    );
   }
 
   async listFiles(bucket: string, path?: string, options?: ListFilesOptions): Promise<any[]> {

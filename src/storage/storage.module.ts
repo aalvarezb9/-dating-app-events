@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { FileStorageService } from './file-storage.interface';
 import { S3StorageStrategy } from './strategies/s3-storage.strategy';
 import { SharedConfigService } from '../config/env.config';
+import { UploadTicketService } from '../files/upload-tickets';
 
 /**
  * Storage Module
@@ -33,7 +34,9 @@ import { SharedConfigService } from '../config/env.config';
       },
       inject: [SharedConfigService],
     },
+    // Uploads that go straight to the storage (presigned POST) and are checked afterwards: see files/upload-tickets.ts
+    UploadTicketService,
   ],
-  exports: [FileStorageService],
+  exports: [FileStorageService, UploadTicketService],
 })
 export class StorageModule {}
