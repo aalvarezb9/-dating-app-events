@@ -6,14 +6,6 @@ export interface DatabaseConfig {
   url: string;
 }
 
-export interface SupabaseConfig {
-  url: string;
-  anonKey: string;
-  serviceRoleKey: string;
-  jwtSecret: string;
-  storageUrl: string;
-}
-
 /** The User Pool of Cognito that identifies the people of the platform (only `auth` has permission on it; the rest verify tokens) */
 export interface CognitoConfig {
   region: string;
@@ -111,19 +103,6 @@ export class SharedConfigService {
   }
 
   /**
-   * Supabase configuration
-   */
-  get supabase(): SupabaseConfig {
-    return {
-      url: this.getRequired('SUPABASE_URL'),
-      anonKey: this.getRequired('SUPABASE_ANON_KEY'),
-      serviceRoleKey: this.getRequired('SUPABASE_SERVICE_ROLE_KEY'),
-      jwtSecret: this.getRequired('SUPABASE_JWT_SECRET'),
-      storageUrl: this.getRequired('SUPABASE_STORAGE_URL'),
-    };
-  }
-
-  /**
    * Cognito (AUTH_PROVIDER=cognito). `COGNITO_ISSUER` and `COGNITO_JWKS_URL` are only set when they are not the ones of AWS (the emulator
    * reports its own address as the issuer); without them they are derived from the region and the pool.
    */
@@ -140,6 +119,16 @@ export class SharedConfigService {
       jwksUrl: this.get('COGNITO_JWKS_URL') || `${issuer}/.well-known/jwks.json`,
       endpoint: this.get('AWS_ENDPOINT_URL') || undefined,
     };
+  }
+
+  /** Which identity provider the platform uses (`cognito`): there is no default, a service that does not say fails at startup */
+  get authProvider(): string {
+    return this.getRequired('AUTH_PROVIDER');
+  }
+
+  /** Which file storage the platform uses (`s3`): there is no default */
+  get storageProvider(): string {
+    return this.getRequired('STORAGE_PROVIDER');
   }
 
   /** Files in S3: region, bucket prefix and the base URL the public files are served from */

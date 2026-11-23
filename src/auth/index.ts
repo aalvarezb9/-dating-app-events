@@ -3,8 +3,8 @@
  *
  * Exports:
  * - AuthService: Abstract contract for auth operations
- * - SupabaseAuthStrategy: Concrete implementation for Supabase Auth
- * - SupabaseJwtStrategy: JWT validation strategy for Supabase
+ * - CognitoAuthStrategy: Concrete implementation for Cognito
+ * - CognitoJwtStrategy: JWT validation strategy (Cognito tokens and support sessions)
  * - AuthModule: Module configuration with provider
  */
 
@@ -12,8 +12,6 @@
 export * from './auth-service.interface';
 
 // Concrete strategies
-export * from './strategies/supabase-auth.strategy';
-export * from './strategies/supabase-jwt.strategy';
 export * from './strategies/cognito-auth.strategy';
 export * from './strategies/cognito-jwt.strategy';
 

@@ -2,10 +2,8 @@ import { Module, Global } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { TenantBlockCache } from './tenant-block';
-import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { CognitoJwtStrategy } from './strategies/cognito-jwt.strategy';
 import { AuthService } from './auth-service.interface';
-import { SupabaseAuthStrategy } from './strategies/supabase-auth.strategy';
 import { CognitoAuthStrategy } from './strategies/cognito-auth.strategy';
 import { SharedConfigModule } from '../config/shared-config.module';
 import { SharedConfigService } from '../config/env.config';
@@ -14,13 +12,12 @@ import { SharedConfigService } from '../config/env.config';
  * Auth Module
  *
  * Provides authentication services using Strategy Pattern.
- * The actual strategy is determined at runtime based on AUTH_PROVIDER env var.
+ * The actual strategy is determined at runtime based on the AUTH_PROVIDER env var (required, no default).
  *
  * Supported providers:
  * - 'cognito': CognitoAuthStrategy + CognitoJwtStrategy (which also verifies the tokens of the support sessions)
- * - 'supabase' (default for now): SupabaseAuthStrategy + SupabaseJwtStrategy (the original one, being retired)
  *
- * Whatever the provider, the JWT strategy is registered in passport as `jwt`, the name `JwtAuthGuard` asks for.
+ * The JWT strategy is registered in passport as `jwt`, the name `JwtAuthGuard` asks for.
  *
  * To add a new provider:
  * 1. Create strategy class extending AuthService
@@ -49,11 +46,9 @@ import { SharedConfigService } from '../config/env.config';
     {
       provide: 'JWT_STRATEGY',
       useFactory: (config: SharedConfigService, cache?: TenantBlockCache) => {
-        const provider = config.get('AUTH_PROVIDER') || 'supabase';
+        const provider = config.authProvider;
 
         switch (provider) {
-          case 'supabase':
-            return new SupabaseJwtStrategy(config, cache);
           case 'cognito':
             return new CognitoJwtStrategy(config, cache);
           default:
@@ -66,11 +61,9 @@ import { SharedConfigService } from '../config/env.config';
     {
       provide: AuthService,
       useFactory: (config: SharedConfigService) => {
-        const provider = config.get('AUTH_PROVIDER') || 'supabase';
+        const provider = config.authProvider;
 
         switch (provider) {
-          case 'supabase':
-            return new SupabaseAuthStrategy(config);
           case 'cognito':
             return new CognitoAuthStrategy(config);
           default:

@@ -3,7 +3,7 @@
  *
  * Exports:
  * - FileStorageService: Abstract contract for file storage operations
- * - SupabaseStorageStrategy: Concrete implementation for Supabase Storage
+ * - S3StorageStrategy: Concrete implementation for S3
  * - StorageModule: Module configuration with provider
  */
 
@@ -11,7 +11,6 @@
 export * from './file-storage.interface';
 
 // Concrete strategies
-export * from './strategies/supabase-storage.strategy';
 export * from './strategies/s3-storage.strategy';
 
 // Module
