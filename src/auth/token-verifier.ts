@@ -22,6 +22,8 @@ export interface TokenVerifierOptions {
   cognito: { issuer: string; jwksUrl: string; clientId: string };
   /** The tokens `auth` signs for a support session (HS256, a secret of their own) */
   support: { secret: string };
+  /** Seconds of difference between clocks that `exp` and `nbf` tolerate */
+  clockToleranceSeconds?: number;
 }
 
 export class InvalidTokenError extends Error {}
@@ -41,10 +43,13 @@ export class InvalidTokenError extends Error {}
 export class TokenVerifier {
   private readonly keys;
   private readonly supportKey: Uint8Array;
+  /** What both ways require: an expiry and a subject (a token without them is refused) */
+  private readonly common: { requiredClaims: string[]; clockTolerance?: number };
 
   constructor(private readonly options: TokenVerifierOptions) {
     this.keys = createRemoteJWKSet(new URL(options.cognito.jwksUrl));
     this.supportKey = new TextEncoder().encode(options.support.secret);
+    this.common = { requiredClaims: ['exp', 'sub'], ...(options.clockToleranceSeconds !== undefined ? { clockTolerance: options.clockToleranceSeconds } : {}) };
   }
 
   async verify(token: string): Promise<VerifiedToken> {
@@ -57,11 +62,11 @@ export class TokenVerifier {
 
     try {
       if (issuer === SUPPORT_TOKEN_ISSUER) {
-        const { payload } = await jwtVerify(token, this.supportKey, { algorithms: ['HS256'], issuer: SUPPORT_TOKEN_ISSUER });
+        const { payload } = await jwtVerify(token, this.supportKey, { algorithms: ['HS256'], issuer: SUPPORT_TOKEN_ISSUER, ...this.common });
         return this.fromSupport(payload);
       }
       if (issuer === this.options.cognito.issuer) {
-        const { payload } = await jwtVerify(token, this.keys, { algorithms: ['RS256'], issuer: this.options.cognito.issuer });
+        const { payload } = await jwtVerify(token, this.keys, { algorithms: ['RS256'], issuer: this.options.cognito.issuer, ...this.common });
         return this.fromCognito(payload);
       }
     } catch (error: any) {
