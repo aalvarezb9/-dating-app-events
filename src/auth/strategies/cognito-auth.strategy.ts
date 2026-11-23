@@ -9,6 +9,7 @@ import {
   AdminInitiateAuthCommand,
   AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
+  AdminUserGlobalSignOutCommand,
   AttributeType,
   AuthenticationResultType,
   CognitoIdentityProviderClient,
@@ -94,13 +95,13 @@ export class CognitoAuthStrategy extends AuthService {
   }
 
   async signUp(options: SignUpOptions): Promise<SignUpResult> {
-    const { firstName, lastName, phone, ...rest } = options.metadata ?? {};
+    // The phone is not sent: Cognito only takes E.164 numbers, and `auth` keeps it in its own database
+    const { firstName, lastName, phone: _phone, ...rest } = options.metadata ?? {};
     const attributes: AttributeType[] = [
       { Name: 'email', Value: options.email },
       { Name: 'email_verified', Value: 'true' },
       ...(firstName ? [{ Name: 'given_name', Value: String(firstName) }] : []),
       ...(lastName ? [{ Name: 'family_name', Value: String(lastName) }] : []),
-      ...(phone ? [{ Name: 'phone_number', Value: String(phone) }] : []),
       ...CUSTOM.filter((name) => rest[name] !== undefined).map((name) => ({ Name: `custom:${name}`, Value: String(rest[name]) })),
     ];
     try {
@@ -211,6 +212,10 @@ export class CognitoAuthStrategy extends AuthService {
       // A wrong code, an expired one and an unknown account are the same answer
       throw new BadRequestException('Invalid or expired code');
     }
+    // Whoever had the old password loses access: revoke every refresh token of the account
+    await this.client.send(new AdminUserGlobalSignOutCommand({ UserPoolId: this.poolId, Username: email })).catch((error: any) => {
+      this.logger.warn(`Could not close the sessions after a password reset: ${error?.message}`);
+    });
   }
 
   async updatePassword(userId: string, newPassword: string): Promise<void> {
