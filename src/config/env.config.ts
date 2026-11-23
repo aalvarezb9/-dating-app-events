@@ -30,6 +30,17 @@ export interface CognitoConfig {
   endpoint?: string;
 }
 
+/** Files in S3 (STORAGE_PROVIDER=s3). The logical name of a bucket (`payment-proofs`) is what the code uses; the real one is `<prefix><name>` */
+export interface S3Config {
+  region: string;
+  /** Prepended to every bucket name: bucket names are global in AWS (`bookly-dev-`), and one stage must not touch another */
+  bucketPrefix: string;
+  /** Where the public files are served from (CloudFront in AWS): the public URL of a file is `<assetsBaseUrl>/<bucket>/<path>` */
+  assetsBaseUrl: string;
+  /** Only locally (the emulator); it also turns on path-style addressing */
+  endpoint?: string;
+}
+
 export interface RedisConfig {
   host: string;
   port: number;
@@ -127,6 +138,16 @@ export class SharedConfigService {
       clientSecret: this.get('COGNITO_CLIENT_SECRET') || undefined,
       issuer,
       jwksUrl: this.get('COGNITO_JWKS_URL') || `${issuer}/.well-known/jwks.json`,
+      endpoint: this.get('AWS_ENDPOINT_URL') || undefined,
+    };
+  }
+
+  /** Files in S3: region, bucket prefix and the base URL the public files are served from */
+  get s3(): S3Config {
+    return {
+      region: this.getRequired('AWS_REGION'),
+      bucketPrefix: this.getRequired('S3_BUCKET_PREFIX'),
+      assetsBaseUrl: this.getRequired('ASSETS_BASE_URL').replace(/\/+$/, ''),
       endpoint: this.get('AWS_ENDPOINT_URL') || undefined,
     };
   }

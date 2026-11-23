@@ -1,6 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { FileStorageService } from './file-storage.interface';
 import { SupabaseStorageStrategy } from './strategies/supabase-storage.strategy';
+import { S3StorageStrategy } from './strategies/s3-storage.strategy';
 import { SharedConfigService } from '../config/env.config';
 
 /**
@@ -10,8 +11,8 @@ import { SharedConfigService } from '../config/env.config';
  * The actual strategy is determined at runtime based on STORAGE_PROVIDER env var.
  *
  * Supported providers:
- * - 'supabase' (default): SupabaseStorageStrategy
- * - 's3' (future): S3StorageStrategy
+ * - 's3': S3StorageStrategy
+ * - 'supabase' (default for now, being retired): SupabaseStorageStrategy
  *
  * To add a new provider:
  * 1. Create strategy class extending FileStorageService
@@ -28,9 +29,8 @@ import { SharedConfigService } from '../config/env.config';
         switch (provider) {
           case 'supabase':
             return new SupabaseStorageStrategy(config);
-          // Future providers:
-          // case 's3':
-          //   return new S3StorageStrategy(config);
+          case 's3':
+            return new S3StorageStrategy(config);
           default:
             throw new Error(`Unknown storage provider: ${provider}`);
         }
