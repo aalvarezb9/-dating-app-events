@@ -16,6 +16,8 @@ export interface ManifestContractInput {
   /** The text of `serverless.yml` and of `serverless/queues.js` */
   serverlessYml: string;
   queuesHelperJs: string;
+  /** Event types that do not belong to the platform (what SES publishes: `Bounce`, `Complaint`) and that a direct queue may take */
+  externalEvents?: string[];
 }
 
 const pascal = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
@@ -31,7 +33,7 @@ export function manifestProblems(input: ManifestContractInput): string[] {
   const { manifest, consumers, functions, serverlessYml, queuesHelperJs } = input;
   const problems: string[] = [];
   const keys = Object.keys(manifest.consumers);
-  const known = new Set<string>(Object.values(DomainEventType));
+  const known = new Set<string>([...Object.values(DomainEventType), ...(input.externalEvents ?? [])]);
 
   for (const key of keys.filter((k) => !consumers[k])) problems.push(`"${key}" is in the manifest but the spec gives no consumer class for it`);
   for (const key of Object.keys(consumers).filter((k) => !manifest.consumers[k])) problems.push(`${consumers[key].name} is not in the manifest as "${key}"`);

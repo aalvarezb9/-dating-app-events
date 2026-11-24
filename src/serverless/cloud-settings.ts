@@ -28,6 +28,11 @@ export interface CloudSettings {
   /** AppSync Events (`deploy/cloud/realtime`): the HTTP endpoint the signals are published to (`APPSYNC_EVENTS_ENDPOINT`) and the id of the API (for the IAM policy of the publisher) */
   appsyncEndpoint?: unknown;
   appsyncApiId?: unknown;
+  /** SES (`deploy/cloud/mail`): the sender (`MAIL_FROM`), the configuration set (`SES_CONFIGURATION_SET`) and the ARNs of the identity and the set, for the IAM policy of the sender */
+  mailFrom?: unknown;
+  sesConfigurationSet?: unknown;
+  sesConfigurationSetArn?: unknown;
+  sesIdentityArn?: unknown;
 }
 
 export function cloudSettings(stage: string): CloudSettings {
@@ -51,5 +56,9 @@ export function cloudSettings(stage: string): CloudSettings {
     assetsBaseUrl: imported('assets-base-url'),
     appsyncEndpoint: imported('appsync-events-endpoint'),
     appsyncApiId: imported('appsync-events-api-id'),
+    mailFrom: imported('mail-from'),
+    sesConfigurationSet: imported('ses-configuration-set'),
+    sesConfigurationSetArn: imported('ses-configuration-set-arn'),
+    sesIdentityArn: imported('ses-identity-arn'),
   };
 }
