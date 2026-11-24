@@ -25,6 +25,9 @@ export interface CloudSettings {
   cognitoClientId?: unknown;
   /** The address the public files are served from (CloudFront, `deploy/cloud/assets`), no trailing slash: `ASSETS_BASE_URL` */
   assetsBaseUrl?: unknown;
+  /** AppSync Events (`deploy/cloud/realtime`): the HTTP endpoint the signals are published to (`APPSYNC_EVENTS_ENDPOINT`) and the id of the API (for the IAM policy of the publisher) */
+  appsyncEndpoint?: unknown;
+  appsyncApiId?: unknown;
 }
 
 export function cloudSettings(stage: string): CloudSettings {
@@ -46,5 +49,7 @@ export function cloudSettings(stage: string): CloudSettings {
     cognitoUserPoolId: imported('user-pool-id'),
     cognitoClientId: imported('user-pool-client-id'),
     assetsBaseUrl: imported('assets-base-url'),
+    appsyncEndpoint: imported('appsync-events-endpoint'),
+    appsyncApiId: imported('appsync-events-api-id'),
   };
 }
