@@ -1,5 +1,5 @@
 /**
- * What a service takes from the CLOUD stacks (`deploy/cloud/network` and `deploy/cloud/data`) when it is deployed to AWS, for the `serverless.yml`
+ * What a service takes from the CLOUD stacks (`deploy/cloud/network`, `data` and `assets`, and the shared stack) when it is deployed to AWS, for the `serverless.yml`
  * of every service: `custom.cloud: ${file(./serverless/cloud.js)}`.
  *
  * Locally (stage `local`) the functions are deployed to the emulator only to create their queues: they do not run there (the compose runs the
@@ -20,6 +20,11 @@ export interface CloudSettings {
   redisTls?: string;
   /** More secrets of Secrets Manager to read at startup (the connection string of the database and the token of Redis), to append to `SECRETS_IDS` */
   extraSecrets?: string;
+  /** The User Pool and its client (`deploy/stack`): every service verifies tokens against them. The issuer and the keys are derived from the id and the region */
+  cognitoUserPoolId?: unknown;
+  cognitoClientId?: unknown;
+  /** The address the public files are served from (CloudFront, `deploy/cloud/assets`), no trailing slash: `ASSETS_BASE_URL` */
+  assetsBaseUrl?: unknown;
 }
 
 export function cloudSettings(stage: string): CloudSettings {
@@ -38,5 +43,8 @@ export function cloudSettings(stage: string): CloudSettings {
     redisPort: imported('redis-port'),
     redisTls: 'true',
     extraSecrets: `,bookly/${stage}/database-url,bookly/${stage}/redis`,
+    cognitoUserPoolId: imported('user-pool-id'),
+    cognitoClientId: imported('user-pool-client-id'),
+    assetsBaseUrl: imported('assets-base-url'),
   };
 }
