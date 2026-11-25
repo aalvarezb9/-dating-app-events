@@ -39,11 +39,16 @@ export async function isAdminSessionAuthorized(cache: TenantBlockCache | undefin
   }
 }
 
-/** The `session_id` claim GoTrue puts in every access token, read without verifying it (the caller trusts the token it just received) */
+/**
+ * The id of the session of an access token, read without verifying it (the caller trusts the token it just received). The same rule as
+ * `TokenVerifier`, which is what every service uses to look the session up: Cognito has no `session_id`, its `origin_jti` stays the same
+ * across the refreshes of one login (`jti` changes with every access token, so it is only the last resort).
+ */
 export function sessionIdOfToken(accessToken: string): string | undefined {
   try {
     const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url').toString('utf8'));
-    return typeof payload.session_id === 'string' ? payload.session_id : undefined;
+    const id = payload.session_id ?? payload.origin_jti ?? payload.jti;
+    return typeof id === 'string' ? id : undefined;
   } catch {
     return undefined;
   }
