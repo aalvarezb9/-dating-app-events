@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import serverlessExpress from '@codegenie/serverless-express';
 import { loadSecrets } from '../config/load-secrets';
 import { RuntimeInfo } from '../runtime/runtime-info';
-import { fromEdge, HttpApiEvent } from './edge-event';
+import { fromEdge, HttpApiEvent, RestApiEvent } from './edge-event';
 
 /**
  * The entry of the Lambda that serves the HTTP API of a service: `export const http = createHttpHandler(AppModule, configureApp);`
@@ -39,7 +39,7 @@ export function createHttpHandler(appModule: Type<unknown>, configure?: Configur
     const http = serverlessExpress({ app: app.getHttpAdapter().getInstance() });
     // `EDGE_PATH_PREFIX` is part of how the function is wired (serverless.yml), like the stage: the configuration of the application is not involved
     const prefix = process.env.EDGE_PATH_PREFIX || undefined;
-    return (event, context) => http(fromEdge(event as HttpApiEvent, prefix) as never, context as never, () => undefined) as Promise<unknown>;
+    return (event, context) => http(fromEdge(event as HttpApiEvent | RestApiEvent, prefix) as never, context as never, () => undefined) as Promise<unknown>;
   };
 
   return async (event, context) => {
