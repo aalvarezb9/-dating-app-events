@@ -33,6 +33,19 @@ export interface CloudSettings {
   sesConfigurationSet?: unknown;
   sesConfigurationSetArn?: unknown;
   sesIdentityArn?: unknown;
+  /**
+   * The addresses the other services call (`AUTH_SERVICE_URL`, `BUSINESS_OWNER_SERVICE_URL`, `SCHEDULE_SERVICE_URL`): `https://internal.api.<service>.<BASE_DOMAIN>`,
+   * a private REST API that only answers inside the VPC (`deploy/cloud/internal`). The name is the same one that stack gives it: it is derived, not imported, because the
+   * services are deployed BEFORE that stack (it points at their functions).
+   */
+  authServiceUrl?: string;
+  businessOwnerServiceUrl?: string;
+  scheduleServiceUrl?: string;
+}
+
+/** `internal.api.<service>.<baseDomain>`: the name of the private API of a service (the same rule as `deploy/cloud/internal/resources.js`) */
+export function internalApiHost(baseDomain: string, service: 'auth' | 'business-owner' | 'schedule'): string {
+  return `internal.api.${service}.${baseDomain}`;
 }
 
 export function cloudSettings(stage: string): CloudSettings {
@@ -40,6 +53,12 @@ export function cloudSettings(stage: string): CloudSettings {
     return {};
   }
   const imported = (name: string) => ({ 'Fn::ImportValue': `bookly-${stage}-${name}` });
+  // The base domain of the environment (`dev.usebookly.app`): it comes from `deploy/stages/<stage>.env`, the same value the stack of the private APIs reads. No default.
+  const baseDomain = process.env.BASE_DOMAIN;
+  if (!baseDomain) {
+    throw new Error(`BASE_DOMAIN is required to deploy '${stage}' (deploy/stages/${stage}.env): the addresses of the other services are internal.api.<service>.<BASE_DOMAIN>`);
+  }
+  const serviceUrl = (service: 'auth' | 'business-owner' | 'schedule') => `https://${internalApiHost(baseDomain, service)}`;
 
   return {
     vpc: {
@@ -60,5 +79,8 @@ export function cloudSettings(stage: string): CloudSettings {
     sesConfigurationSet: imported('ses-configuration-set'),
     sesConfigurationSetArn: imported('ses-configuration-set-arn'),
     sesIdentityArn: imported('ses-identity-arn'),
+    authServiceUrl: serviceUrl('auth'),
+    businessOwnerServiceUrl: serviceUrl('business-owner'),
+    scheduleServiceUrl: serviceUrl('schedule'),
   };
 }

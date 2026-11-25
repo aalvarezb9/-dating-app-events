@@ -19,6 +19,7 @@ export interface RestApiEvent {
   multiValueHeaders?: Record<string, string[] | undefined> | null;
   requestContext?: {
     requestId?: string;
+    stage?: string;
     authorizer?: unknown;
     http?: { path?: string };
   };
@@ -26,6 +27,9 @@ export interface RestApiEvent {
 
 /** `/api/v1` is the global prefix of every service; the edge adds the name of the service after it (`/api/v1/user/public/...`) */
 const API_PREFIX = '/api/v1';
+
+/** The stage of the private REST API that the other services call (`deploy/cloud/internal`); the edge's stage is named after the environment */
+export const INTERNAL_API_STAGE = 'internal';
 
 const isRestEvent = (event: HttpApiEvent | RestApiEvent): event is RestApiEvent =>
   typeof (event as RestApiEvent).path === 'string' && typeof (event as RestApiEvent).httpMethod === 'string' && (event as HttpApiEvent).rawPath === undefined;
@@ -38,11 +42,12 @@ const isRestEvent = (event: HttpApiEvent | RestApiEvent): event is RestApiEvent 
  *
  * - `prefix` (`EDGE_PATH_PREFIX`, e.g. `user`): `/api/v1/user/x` becomes `/api/v1/x`. A path that does not start with it is left as it
  *   is, which is what a call from another service (to the address of the function itself) looks like. Auth does not set it: its
- *   own controllers already live under `/api/v1/auth`.
+ *   own controllers already live under `/api/v1/auth`. It is never applied to a call between services (stage `internal`).
  * - A request that comes through the edge carries an id that API Gateway gave it (the client does not choose it), and it becomes the
  *   `X-Request-Id`. The edge is a REST API (payload 1.0): an event of that shape can only come from it, because the HTTP API of each
- *   service (payload 2.0, the address that the other services call) is not the edge. An HTTP API event counts as coming from the edge
- *   only if an authorizer ran (the edge used to be one); a call that does not come through the edge keeps the id the caller sent.
+ *   service (payload 2.0) is not the edge. An HTTP API event counts as coming from the edge only if an authorizer ran (the edge used to be
+ *   one). The other services call a private REST API too (stage `internal`, `deploy/cloud/internal`): that is NOT the edge, so its
+ *   events keep the id the caller sent (the trace of a call between services) and only the prefix logic applies, which never matches.
  *
  * It returns a new event; the one it receives is not changed.
  */
@@ -50,8 +55,9 @@ export function fromEdge<T extends HttpApiEvent | RestApiEvent>(event: T, prefix
   const rest = isRestEvent(event);
   const path = rest ? (event as RestApiEvent).path : (event as HttpApiEvent).rawPath;
   const base = prefix ? `${API_PREFIX}/${prefix}/` : undefined;
-  const strip = path !== undefined && base !== undefined && path.startsWith(base);
-  const viaEdge = rest || event.requestContext?.authorizer !== undefined;
+  const internal = rest && event.requestContext?.stage === INTERNAL_API_STAGE;
+  const strip = !internal && path !== undefined && base !== undefined && path.startsWith(base);
+  const viaEdge = !internal && (rest || event.requestContext?.authorizer !== undefined);
   const requestId = event.requestContext?.requestId;
   const stamp = viaEdge && requestId ? requestId : undefined;
   if (!strip && stamp === undefined) {
