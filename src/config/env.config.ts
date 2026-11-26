@@ -57,7 +57,8 @@ export interface MessagingConfig {
 }
 
 export interface AppConfig {
-  port: number;
+  /** The port of the HTTP server: required where there is one (`main.ts`); read lazily so that a Lambda, which has no port, never asks for it */
+  readonly port: number;
   nodeEnv: string;
   baseDomain: string;
 }
@@ -169,8 +170,12 @@ export class SharedConfigService {
     if (this.get('NODE_TLS_REJECT_UNAUTHORIZED') === '0' && !['local', 'test'].includes(nodeEnv)) {
       throw new Error(`NODE_TLS_REJECT_UNAUTHORIZED=0 is only allowed with NODE_ENV=local or test (NODE_ENV is "${nodeEnv}")`);
     }
+    // A function of AWS has no port (the server is API Gateway): `PORT` is only required when something asks for it, which only `main.ts` does
+    const required = (name: string) => this.getRequired(name);
     return {
-      port: parseInt(this.getRequired('PORT')),
+      get port() {
+        return parseInt(required('PORT'));
+      },
       nodeEnv,
       baseDomain: this.getRequired('BASE_DOMAIN'),
     };
