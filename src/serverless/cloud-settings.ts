@@ -46,6 +46,8 @@ export interface CloudSettings {
   /** Where the links of the emails of auth lead: the front ends, `app.<BASE_DOMAIN>` and `admin.<BASE_DOMAIN>` (the origins `deploy/cloud/cdn` lets through CORS) */
   emailVerificationLinkUrl?: string;
   adminActivationLinkUrl?: string;
+  /** The login of the panel of the owners: the button of the email that tells them their business was approved (`app.<BASE_DOMAIN>/login`) */
+  businessLoginUrl?: string;
 }
 
 /** `internal.api.<service>.<baseDomain>`: the name of the private API of a service (the same rule as `deploy/cloud/internal/resources.js`) */
@@ -87,6 +89,7 @@ export function cloudSettings(stage: string): CloudSettings {
     baseDomain,
     emailVerificationLinkUrl: `https://app.${baseDomain}/verify-email`,
     adminActivationLinkUrl: `https://admin.${baseDomain}/activate`,
+    businessLoginUrl: `https://app.${baseDomain}/login`,
     authServiceUrl: serviceUrl('auth'),
     businessOwnerServiceUrl: serviceUrl('business-owner'),
     scheduleServiceUrl: serviceUrl('schedule'),

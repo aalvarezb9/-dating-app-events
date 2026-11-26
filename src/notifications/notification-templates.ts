@@ -81,8 +81,11 @@ export interface NotificationTemplateCatalog {
     link?: string;
   };
 
-  /** The platform approved the business: its owner can sign in (auth, `BUSINESS_REQUEST_APPROVED`) */
-  BUSINESS_APPROVED: { ownerName?: string; businessName?: string };
+  /**
+   * The platform approved the business: its owner can sign in (auth, `BUSINESS_REQUEST_APPROVED`). `loginUrl` is where the button of the email leads: the
+   * login of the panel of the owner IN THE ENVIRONMENT that sent it (local, dev or prod: `app.<environment>.usebookly.app/login`), so it is always given.
+   */
+  BUSINESS_APPROVED: { ownerName?: string; businessName?: string; loginUrl: string };
 
   /** The platform rejected the business; `reason` is what the owner is told */
   BUSINESS_REJECTED: { ownerName?: string; businessName?: string; reason?: string };
