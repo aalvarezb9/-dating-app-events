@@ -34,13 +34,15 @@ export interface CloudSettings {
   sesConfigurationSetArn?: unknown;
   sesIdentityArn?: unknown;
   /**
-   * The addresses the other services call (`AUTH_SERVICE_URL`, `BUSINESS_OWNER_SERVICE_URL`, `SCHEDULE_SERVICE_URL`): `https://internal.api.<service>.<BASE_DOMAIN>`,
+   * The addresses the other services call (`AUTH_SERVICE_URL`, `BUSINESS_OWNER_SERVICE_URL`, `SCHEDULE_SERVICE_URL`, `ADMIN_SAAS_SERVICE_URL`): `https://internal.api.<service>.<BASE_DOMAIN>`,
    * a private REST API that only answers inside the VPC (`deploy/cloud/internal`). The name is the same one that stack gives it: it is derived, not imported, because the
    * services are deployed BEFORE that stack (it points at their functions).
    */
   authServiceUrl?: string;
   businessOwnerServiceUrl?: string;
   scheduleServiceUrl?: string;
+  /** The administration, which notifications asks for the templates of the messages */
+  adminSaasServiceUrl?: string;
   /** `BASE_DOMAIN` of the functions (the public page of a business is `<subdomain>.<BASE_DOMAIN>`; `SharedConfigService.app` requires it): the same value the addresses above derive from */
   baseDomain?: string;
   /** Where the links of the emails of auth lead: the front ends, `app.<BASE_DOMAIN>` and `admin.<BASE_DOMAIN>` (the origins `deploy/cloud/cdn` lets through CORS) */
@@ -51,7 +53,7 @@ export interface CloudSettings {
 }
 
 /** `internal.api.<service>.<baseDomain>`: the name of the private API of a service (the same rule as `deploy/cloud/internal/resources.js`) */
-export function internalApiHost(baseDomain: string, service: 'auth' | 'business-owner' | 'schedule'): string {
+export function internalApiHost(baseDomain: string, service: 'auth' | 'business-owner' | 'schedule' | 'admin-saas'): string {
   return `internal.api.${service}.${baseDomain}`;
 }
 
@@ -65,7 +67,7 @@ export function cloudSettings(stage: string): CloudSettings {
   if (!baseDomain) {
     throw new Error(`BASE_DOMAIN is required to deploy '${stage}' (deploy/stages/${stage}.env): the addresses of the other services are internal.api.<service>.<BASE_DOMAIN>`);
   }
-  const serviceUrl = (service: 'auth' | 'business-owner' | 'schedule') => `https://${internalApiHost(baseDomain, service)}`;
+  const serviceUrl = (service: 'auth' | 'business-owner' | 'schedule' | 'admin-saas') => `https://${internalApiHost(baseDomain, service)}`;
 
   return {
     vpc: {
@@ -93,5 +95,6 @@ export function cloudSettings(stage: string): CloudSettings {
     authServiceUrl: serviceUrl('auth'),
     businessOwnerServiceUrl: serviceUrl('business-owner'),
     scheduleServiceUrl: serviceUrl('schedule'),
+    adminSaasServiceUrl: serviceUrl('admin-saas'),
   };
 }
