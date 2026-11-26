@@ -43,6 +43,9 @@ export interface CloudSettings {
   scheduleServiceUrl?: string;
   /** `BASE_DOMAIN` of the functions (the public page of a business is `<subdomain>.<BASE_DOMAIN>`; `SharedConfigService.app` requires it): the same value the addresses above derive from */
   baseDomain?: string;
+  /** Where the links of the emails of auth lead: the front ends, `app.<BASE_DOMAIN>` and `admin.<BASE_DOMAIN>` (the origins `deploy/cloud/cdn` lets through CORS) */
+  emailVerificationLinkUrl?: string;
+  adminActivationLinkUrl?: string;
 }
 
 /** `internal.api.<service>.<baseDomain>`: the name of the private API of a service (the same rule as `deploy/cloud/internal/resources.js`) */
@@ -82,6 +85,8 @@ export function cloudSettings(stage: string): CloudSettings {
     sesConfigurationSetArn: imported('ses-configuration-set-arn'),
     sesIdentityArn: imported('ses-identity-arn'),
     baseDomain,
+    emailVerificationLinkUrl: `https://app.${baseDomain}/verify-email`,
+    adminActivationLinkUrl: `https://admin.${baseDomain}/activate`,
     authServiceUrl: serviceUrl('auth'),
     businessOwnerServiceUrl: serviceUrl('business-owner'),
     scheduleServiceUrl: serviceUrl('schedule'),
