@@ -48,6 +48,7 @@ npm test          # jest
 | Correr una tarea programada o de arranque como función Lambda | `runTask(AppModule, Servicio, 'método')` y, en el servicio, `RuntimeInfo.isServerless` para quitarla del arranque | `async/run-task.ts`, `runtime/` |
 | Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
 | Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
+| Validar el nombre de un negocio (sin puntos, comas, paréntesis…; que no se haga pasar por la plataforma) o saber qué subdominios están reservados | `@IsBusinessName()`, `businessNameProblem`, `RESERVED_SUBDOMAINS` | `common/validators/business-name.ts`, `common/constants/reserved-subdomains.ts` |
 | Declarar una tabla (columnas de auditoría, tenant, prefijo del servicio) | `@Entity` + `TenantEntity` / `GlobalEntity` | `database/entities/` |
 | Contar / sumar / agrupar (estadísticas) | `repo.aggregate(...)` | `repositories/base/BaseRepository.ts` |
 | Listado paginado con filtros dinámicos | `repo.findManyWithPagination(...)` + `PaginationDto`/`FilterableQueryDto` | `BaseRepository.ts`, `common/dto/` |
