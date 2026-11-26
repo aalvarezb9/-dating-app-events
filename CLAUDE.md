@@ -49,6 +49,7 @@ npm test          # jest
 | Mantener una copia local de datos de otro servicio | `ProjectedEntity` + `applyProjection` + `syncSnapshot` | `projections/` |
 | Exponer un endpoint solo para otros servicios | `@InternalApi()` (+ `readSnapshotPage` para snapshots) | `common/decorators/`, `projections/snapshot.ts` |
 | Validar el nombre de un negocio (sin puntos, comas, paréntesis…; que no se haga pasar por la plataforma) o saber qué subdominios están reservados | `@IsBusinessName()`, `businessNameProblem`, `RESERVED_SUBDOMAINS` | `common/validators/business-name.ts`, `common/constants/reserved-subdomains.ts` |
+| Tipos de negocio (las categorías que administra `admin-saas`): la forma de una categoría, comprobar o rellenar sus plantillas de título y descripción para el SEO, o las que trae la plataforma de inicio (también el respaldo si la administración no responde) | `BusinessCategoryView`, `categoryTemplateProblem`, `renderCategoryTemplate`, `CATEGORY_PLACEHOLDERS`, `DEFAULT_BUSINESS_CATEGORIES` | `common/business-categories.ts` (solo el contrato: quien consulta a la administración tiene su propio `AdminServiceClient`) |
 | Declarar una tabla (columnas de auditoría, tenant, prefijo del servicio) | `@Entity` + `TenantEntity` / `GlobalEntity` | `database/entities/` |
 | Contar / sumar / agrupar (estadísticas) | `repo.aggregate(...)` | `repositories/base/BaseRepository.ts` |
 | Listado paginado con filtros dinámicos | `repo.findManyWithPagination(...)` + `PaginationDto`/`FilterableQueryDto` | `BaseRepository.ts`, `common/dto/` |

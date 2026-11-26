@@ -11,3 +11,4 @@ export * from './context';
 export * from './constants/currencies';
 export * from './constants/reserved-subdomains';
 export * from './validators/business-name';
+export * from './business-categories';
