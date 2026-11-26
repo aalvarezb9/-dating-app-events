@@ -4,9 +4,12 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import sanitizeHtml, { IOptions } from 'sanitize-html';
+import { RAW_BODY_FIELDS_KEY } from '../decorators/raw-body-fields.decorator';
 
 /**
  * Global interceptor to sanitize all incoming request data
@@ -36,12 +39,19 @@ export class SanitizeInterceptor implements NestInterceptor {
     disallowedTagsMode: 'discard', // Remove tags completely
   };
 
+  /** `reflector` reads `@RawBodyFields()`; without it (a test that builds the interceptor by hand) every field is sanitized */
+  constructor(@Optional() private readonly reflector?: Reflector) {}
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
 
     // Sanitize all incoming data sources (mutate in place, don't reassign)
     if (request.body && typeof request.body === 'object') {
-      this.sanitizeObjectInPlace(request.body);
+      const raw = this.reflector?.getAllAndOverride<string[] | undefined>(
+        RAW_BODY_FIELDS_KEY,
+        [context.getHandler(), context.getClass()],
+      );
+      this.sanitizeObjectInPlace(request.body, new Set(raw ?? []));
     }
 
     if (request.query && typeof request.query === 'object') {
@@ -59,7 +69,7 @@ export class SanitizeInterceptor implements NestInterceptor {
    * Recursively sanitize an object IN PLACE (mutate, don't create new object)
    * This is necessary because request.query and request.params are read-only getters
    */
-  private sanitizeObjectInPlace(obj: any): void {
+  private sanitizeObjectInPlace(obj: any, skipTopLevel?: Set<string>): void {
     if (!obj || typeof obj !== 'object') {
       return;
     }
@@ -81,6 +91,10 @@ export class SanitizeInterceptor implements NestInterceptor {
       // Use Object.prototype.hasOwnProperty.call() to handle objects without hasOwnProperty
       // (e.g., request.query which may have null prototype)
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (skipTopLevel?.has(key)) {
+          // The endpoint cleans this field itself (see `@RawBodyFields`)
+          continue;
+        }
         const value = obj[key];
 
         if (typeof value === 'string') {

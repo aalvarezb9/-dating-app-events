@@ -141,7 +141,8 @@ Si lo que necesitas **no** está en la tabla y lo usarán ≥ 2 servicios, va en
 |---|---|---|
 | `context/execution-context.service.ts` | `ExecutionContext` (AsyncLocalStorage): `tenantId`, `userId`, `userEmail`, `userRoles`, `requestId`, flags `isPublic/isCrossTenant/includeDeleted`; `run(ctx, cb)`, `getTenantId()`… | Leer el tenant en cualquier capa; **abrirlo a mano en consumers, crons y colas** (`run({ tenantId }, cb)`). Nunca `repo.setTenantId` |
 | `interceptors/execution-context.interceptor.ts` | Puebla el `ExecutionContext` por petición HTTP desde el JWT y los metadatos de los decoradores; `requestId` sale de la cabecera `X-Request-Id` del gateway (si tiene forma segura) y `traceparent` de la cabecera W3C | Registrarlo globalmente en `main.ts` antes de los guards |
-| `interceptors/sanitize.interceptor.ts` | Elimina HTML/XSS de `body`, `query` y `params` (recursivo) | Registro global en todo servicio con entrada de usuario |
+| `interceptors/sanitize.interceptor.ts` | Elimina HTML/XSS de `body`, `query` y `params` (recursivo). Respeta `@RawBodyFields()`: esos campos de primer nivel del cuerpo no se tocan | Registro global en todo servicio con entrada de usuario |
+| `decorators/raw-body-fields.decorator.ts` | `@RawBodyFields('body', 'design')` en un handler: el interceptor de sanitización no toca esos campos del cuerpo porque el endpoint los limpia él mismo con una lista blanca (p. ej. el HTML de una plantilla de correo) | Solo cuando el endpoint **debe** recibir HTML y lo sanea con una regla más estricta que «sin etiquetas» |
 | `interceptors/logging.interceptor.ts` | Log de petición/respuesta con el cuerpo **redactado** y truncado | Registro global |
 | `interceptors/response-transform.interceptor.ts` | Envuelve la respuesta en `{ success, data, timestamp }` y aplica `@UseDto` | Registro global |
 | `interceptors/tenant.interceptor.ts`, `transform.interceptor.ts` | Versiones heredadas | No usar en código nuevo |

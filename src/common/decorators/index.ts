@@ -7,3 +7,4 @@ export * from './use-dto.decorator';
 export * from './include-deleted.decorator';
 export * from './api-standard-response.decorator';
 export * from './internal-api.decorator';
+export * from './raw-body-fields.decorator';
