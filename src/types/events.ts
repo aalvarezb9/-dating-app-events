@@ -22,6 +22,10 @@ export enum DomainEventType {
   SERVICE_DELETED = 'SERVICE_DELETED',
   TEAM_MEMBER_UPSERTED = 'TEAM_MEMBER_UPSERTED',
   TEAM_MEMBER_DELETED = 'TEAM_MEMBER_DELETED',
+  BRANCH_UPSERTED = 'BRANCH_UPSERTED', // A branch of the business with the services it offers (see BranchContract)
+  BRANCH_DELETED = 'BRANCH_DELETED',
+  TEAM_ASSIGNMENT_UPSERTED = 'TEAM_ASSIGNMENT_UPSERTED', // Where a person works on a date, from what time to what time (the rotation between branches)
+  TEAM_ASSIGNMENT_DELETED = 'TEAM_ASSIGNMENT_DELETED',
   BUSINESS_PROFILE_UPSERTED = 'BUSINESS_PROFILE_UPSERTED',
   LANDING_PAGE_UPSERTED = 'LANDING_PAGE_UPSERTED', // Cache invalidation only
   REVIEW_UPSERTED = 'REVIEW_UPSERTED', // Cache invalidation only

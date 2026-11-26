@@ -84,6 +84,61 @@ export interface TeamMemberContract extends ProjectionPayload {
   ratingCount: number;
   displayOrder: number;
   showOnLanding: boolean;
+  /** The branch where the person works when no assignment says otherwise (null = the main branch); optional so older publishers keep working */
+  homeBranchId?: string | null;
+}
+
+/** The place of a branch (the same shape as the address a business registers with) */
+export interface BranchAddressContract {
+  street: string;
+  city: string;
+  state: string;
+  country: string;
+  zipcode: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * A service as one branch offers it. `price` and `durationMinutes` are what the branch charges and takes: null = the service's own
+ * (the consumer reads them from its copy of the service, so a change of the service reaches the branch that inherits it).
+ */
+export interface BranchServiceContract {
+  serviceId: string;
+  price: number | null;
+  durationMinutes: number | null;
+  isActive: boolean;
+}
+
+/**
+ * BRANCH_UPSERTED / BRANCH_DELETED: a branch of the business (the same subdomain, another place). The main branch is the one the business
+ * registered with; a business with only that one has no branch to show. The services it offers travel inside it.
+ */
+export interface BranchContract extends ProjectionPayload {
+  name: string;
+  photoUrl: string | null;
+  address: BranchAddressContract;
+  phone: string | null;
+  /** Hours of the branch; null = follows the business hours */
+  businessHours: WeeklyHoursContract | null;
+  /** Days this branch is closed (besides the closures of the whole business) */
+  closures?: DateRangeContract[] | null;
+  isMain: boolean;
+  isActive: boolean;
+  displayOrder: number;
+  services: BranchServiceContract[];
+}
+
+/**
+ * TEAM_ASSIGNMENT_UPSERTED / TEAM_ASSIGNMENT_DELETED: on a local date ('YYYY-MM-DD', business time zone) a person works at one branch
+ * between two times ('HH:mm'). A date with assignments replaces the usual week of that person: they are only available in those windows.
+ */
+export interface TeamAssignmentContract extends ProjectionPayload {
+  teamMemberId: string;
+  branchId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
 }
 
 /** BUSINESS_PROFILE_UPSERTED */
@@ -101,6 +156,8 @@ export interface BusinessProfileContract extends ProjectionPayload {
   logoUrl: string | null;
   coverImageUrl: string | null;
   subscriptionStatus: string | null;
+  /** Minutes a person needs to go from one branch to another: the least between two appointments at different branches (0 = no gap); optional so older publishers keep working */
+  branchTravelMinutes?: number;
 }
 
 /** LANDING_PAGE_UPSERTED: cache invalidation only (consumers fetch the document by key) */
