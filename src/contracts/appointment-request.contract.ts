@@ -27,6 +27,11 @@ export interface AppointmentRequestCreatedData {
   tenantId: string;
   serviceId: string;
   teamMemberId: string | null;
+  /**
+   * The branch where the appointment takes place. Absent or null = the main branch (an emitter from before the branches keeps working); a business with
+   * several branches always names it. The arbiter checks that the branch is open, offers the service and has the person there at that time.
+   */
+  branchId?: string | null;
   /** null = guest booking */
   customerTenantId: string | null;
   customerUserId: string | null;
